@@ -1631,22 +1631,30 @@
   }
 
   function buildWhatsAppMessage() {
+    var divider = "--------------------------------";
     var lines = [
-      "Olá, Fio a Fio! 👋",
-      "Montei uma seleção pela vitrine do site e gostaria de solicitar um orçamento.",
+      "Olá, Fio a Fio.",
+      "Gostaria de solicitar um orçamento para os itens abaixo.",
       "",
-      "*MEU PEDIDO*"
+      divider,
+      "PEDIDO",
+      divider
     ];
     state.cart.items.forEach(function (item, index) {
       var resolved = resolveCartItem(item);
       lines.push("");
-      lines.push((index + 1) + ". *" + resolved.name + "*");
+      lines.push("ITEM " + (index + 1));
+      lines.push("Produto: " + resolved.name);
       lines.push("Categoria: " + resolved.categoryName);
       lines.push("Cor: " + resolved.colorName);
       lines.push("Quantidade: " + formatNumber(item.quantity) + " " + pluralUnit(resolved.unit, item.quantity));
+      lines.push(divider);
     });
     lines.push("");
-    lines.push("*Resumo:* " + state.cart.items.length + (state.cart.items.length === 1 ? " opção" : " opções") + " • " + formatCartQuantitySummary());
+    lines.push("RESUMO DO PEDIDO");
+    lines.push("Itens selecionados: " + state.cart.items.length + (state.cart.items.length === 1 ? " opção" : " opções"));
+    lines.push("Quantidade total: " + formatCartQuantitySummary());
+    lines.push(divider);
     lines.push("");
     lines.push("Poderiam confirmar a disponibilidade, os valores e as opções de envio?");
     lines.push("Nome:");
