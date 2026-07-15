@@ -2,10 +2,13 @@
   "use strict";
 
   var WHATSAPP_NUMBER = "5519997625253";
+  var EDITOR_HOLD_DURATION = 5000;
+  var EDITOR_PASSWORD_HASH = "b4c1486a5801a6c63dcb72e3682a18927a3f97b5fdbfd869bd15f316648c0a01";
   var STORAGE_KEYS = {
     catalog: "fioafio.catalog.v1",
     catalogBackup: "fioafio.catalog.backup.v1",
     cart: "fioafio.cart.v1",
+    quoteDetails: "fioafio.quote-details.v1",
     editor: "fioafio.editor"
   };
 
@@ -283,6 +286,7 @@
   var state = {
     catalog: null,
     cart: { schemaVersion: 1, items: [] },
+    quoteDetails: {},
     activeCategory: "all",
     search: "",
     currentProductId: null,
@@ -300,6 +304,8 @@
   var dom = {};
   var animationObserver = null;
   var sectionObserver = null;
+  var editorHoldTimer = null;
+  var editorHoldPointerId = null;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -554,9 +560,39 @@
         return normalizeCart(JSON.parse(stored));
       }
     } catch (error) {
-      console.warn("Não foi possível carregar o pedido salvo.", error);
+      console.warn("Não foi possível carregar a seleção salva.", error);
     }
     return { schemaVersion: 1, items: [] };
+  }
+
+  function normalizeQuoteDetails(input) {
+    input = input && typeof input === "object" ? input : {};
+    return {
+      name: cleanText(input.name || "", 80),
+      city: cleanText(input.city || "", 80),
+      state: cleanText(input.state || "", 2).toUpperCase(),
+      fulfillment: cleanText(input.fulfillment || "Quero consultar as opções", 60),
+      postalCode: cleanText(input.postalCode || "", 9),
+      notes: cleanText(input.notes || "", 500)
+    };
+  }
+
+  function loadQuoteDetails() {
+    try {
+      var stored = localStorage.getItem(STORAGE_KEYS.quoteDetails);
+      return stored ? normalizeQuoteDetails(JSON.parse(stored)) : normalizeQuoteDetails({});
+    } catch (error) {
+      return normalizeQuoteDetails({});
+    }
+  }
+
+  function saveQuoteDetails(details) {
+    state.quoteDetails = normalizeQuoteDetails(details);
+    try {
+      localStorage.setItem(STORAGE_KEYS.quoteDetails, JSON.stringify(state.quoteDetails));
+    } catch (error) {
+      // The quote can still be sent when local persistence is unavailable.
+    }
   }
 
   function saveCatalog(options) {
@@ -581,7 +617,7 @@
       localStorage.setItem(STORAGE_KEYS.cart, JSON.stringify(state.cart));
       return true;
     } catch (error) {
-      showToast("Pedido não salvo", "O armazenamento deste navegador pode estar indisponível.", "error");
+      showToast("Seleção não salva", "O armazenamento deste navegador pode estar indisponível.", "error");
       return false;
     }
   }
@@ -1040,8 +1076,22 @@
     dom.cartLinesLabel = bySelector("[data-cart-lines-label]");
     dom.cartLineCount = bySelector("[data-cart-line-count]");
     dom.cartTotalQuantity = bySelector("[data-cart-total-quantity]");
+    dom.quoteDialog = bySelector("[data-quote-dialog]");
+    dom.quoteForm = bySelector("[data-quote-form]");
+    dom.quoteName = bySelector("[data-quote-name]");
+    dom.quoteCity = bySelector("[data-quote-city]");
+    dom.quoteState = bySelector("[data-quote-state]");
+    dom.quoteFulfillment = bySelector("[data-quote-fulfillment]");
+    dom.quotePostalCode = bySelector("[data-quote-postal-code]");
+    dom.quoteNotes = bySelector("[data-quote-notes]");
     dom.editorDialog = bySelector("[data-editor-dialog]");
     dom.editorBar = bySelector("[data-editor-bar]");
+    dom.editorAccessDialog = bySelector("[data-editor-access-dialog]");
+    dom.editorAccessForm = bySelector("[data-editor-access-form]");
+    dom.editorPassword = bySelector("[data-editor-password]");
+    dom.editorAccessError = bySelector("[data-editor-access-error]");
+    dom.editorAccessSubmit = bySelector("[data-editor-access-submit]");
+    dom.editorSecretTrigger = bySelector("[data-editor-secret-trigger]");
     dom.editorCategoriesPanel = bySelector("[data-editor-panel='categories']");
     dom.editorProductsPanel = bySelector("[data-editor-panel='products']");
     dom.editorCategoryList = bySelector("[data-editor-category-list]");
@@ -1131,30 +1181,26 @@
   function renderCategories() {
     dom.categoryGrid.replaceChildren();
     sortedCategories().forEach(function (category, index) {
-      var productCount = state.catalog.products.filter(function (product) {
-        return product.categoryId === category.id;
-      }).length;
       var card = makeElement("article", "category-card");
 
       var mainButton = makeElement("button", "category-card-button");
       mainButton.type = "button";
       mainButton.dataset.action = "select-category";
       mainButton.dataset.categoryId = category.id;
-      mainButton.setAttribute("aria-label", "Ver categoria " + category.name);
+      mainButton.setAttribute("aria-label", "Explorar categoria " + category.name);
 
       var visual = createPhotoVisual(category, "category-visual", "Foto da categoria não cadastrada");
 
       var indexLabel = makeElement("span", "category-index", String(index + 1).padStart(2, "0"));
       var content = makeElement("div", "category-content");
       var textWrap = makeElement("div");
-      var count = makeElement("small", "", productCount + (productCount === 1 ? " opção" : " opções"));
       var title = makeElement("h3", "", category.name);
       var description = makeElement("p", "", category.description);
-      textWrap.append(count, title, description);
+      textWrap.append(title, description);
       var arrow = makeElement("span", "category-arrow");
       arrow.append(
-        makeElement("span", "category-action-label", "Ver produtos"),
-        makeIcon("fa-solid fa-arrow-up-right-from-square")
+        makeElement("span", "category-action-label", "Explorar coleção"),
+        makeIcon("fa-solid fa-arrow-right")
       );
       content.append(textWrap, arrow);
       card.append(visual, indexLabel, content, mainButton);
@@ -1227,12 +1273,7 @@
       var visual = createPhotoVisual(product, "product-visual", "Foto do produto não cadastrada");
       var overlay = makeElement("div", "product-visual-overlay");
       var tag = makeElement("span", "product-tag", category ? category.name : "Tecido");
-      var view = makeElement("span", "product-view");
-      view.append(
-        makeElement("span", "product-action-label", "Selecionar opções"),
-        makeIcon("fa-solid fa-arrow-right")
-      );
-      visual.append(overlay, tag, view);
+      visual.append(overlay, tag);
 
       var info = makeElement("div", "product-info");
       var infoText = makeElement("div");
@@ -1301,7 +1342,7 @@
     dom.productQuantity.value = formatInputNumber(product.minQuantity);
     dom.selectedColor.textContent = "Selecione uma opção";
     dom.addCartButton.disabled = true;
-    dom.addCartButton.querySelector("span").textContent = "Adicionar ao pedido";
+    updateAddCartButton();
     renderProductDialogVisual(product);
 
     dom.colorOptions.replaceChildren();
@@ -1351,7 +1392,19 @@
     });
     dom.selectedColor.textContent = variant.name;
     dom.addCartButton.disabled = false;
+    updateAddCartButton();
     renderProductDialogVisual(product, variant);
+  }
+
+  function updateAddCartButton() {
+    var product = findProduct(state.currentProductId);
+    var variant = findVariant(product, state.selectedVariantId);
+    var label = "Escolha uma cor";
+    if (product && variant && variant.available) {
+      var quantity = clampProductQuantity(product, dom.productQuantity.value);
+      label = "Adicionar " + formatNumber(quantity) + " " + shortUnit(product.unit, quantity) + " • " + variant.name;
+    }
+    dom.addCartButton.querySelector("span").textContent = label;
   }
 
   function formatInputNumber(value) {
@@ -1376,6 +1429,7 @@
     var current = clampProductQuantity(product, dom.productQuantity.value);
     var next = clampProductQuantity(product, current + direction * product.quantityStep);
     dom.productQuantity.value = formatInputNumber(next);
+    updateAddCartButton();
   }
 
   function addCurrentProductToCart() {
@@ -1398,7 +1452,7 @@
       reachedLimit = combined > 999;
     } else {
       if (state.cart.items.length >= 60) {
-        showToast("Pedido muito extenso", "Finalize esta seleção antes de adicionar novas opções.", "error");
+        showToast("Seleção muito extensa", "Solicite este orçamento antes de adicionar novas opções.", "error");
         return;
       }
       state.cart.items.push({
@@ -1421,9 +1475,9 @@
     saveCart();
     renderCart();
     bumpCartCount();
-    announce(product.name + ", cor " + variant.name + ", adicionado ao pedido.");
+    announce(product.name + ", cor " + variant.name + ", adicionado à seleção.");
     showToast(
-      reachedLimit ? "Quantidade ajustada ao limite" : "Adicionado ao pedido",
+      reachedLimit ? "Quantidade ajustada ao limite" : "Adicionado à seleção",
       product.name + " • " + variant.name,
       "success"
     );
@@ -1457,9 +1511,10 @@
 
   function renderCart() {
     dom.cartItems.replaceChildren();
-    state.cart.items.forEach(function (item) {
+    state.cart.items.forEach(function (item, index) {
       var resolved = resolveCartItem(item);
       var row = makeElement("article", "cart-item");
+      row.style.setProperty("--cart-index", String(index));
       var visual = createPhotoVisual(createSnapshotProduct(resolved), "cart-item-visual", "Sem foto");
 
       var info = makeElement("div", "cart-item-info");
@@ -1519,16 +1574,27 @@
     dom.cartTotalQuantity.textContent = formatCartQuantitySummary();
     allBySelector("[data-cart-count]").forEach(function (counter) {
       counter.textContent = String(lineCount);
-      counter.setAttribute("aria-label", lineCount + (lineCount === 1 ? " opção no pedido" : " opções no pedido"));
+      counter.setAttribute("aria-label", lineCount + (lineCount === 1 ? " opção selecionada" : " opções selecionadas"));
     });
     if (dom.cartTrigger) {
       dom.cartTrigger.setAttribute(
         "aria-label",
-        "Abrir pedido, " + lineCount + (lineCount === 1 ? " opção" : " opções")
+        "Abrir seleção, " + lineCount + (lineCount === 1 ? " opção" : " opções")
       );
       dom.cartTrigger.classList.toggle("has-items", lineCount > 0);
     }
     dom.floatingCart.classList.toggle("has-items", lineCount > 0);
+    document.body.classList.toggle("has-cart-items", lineCount > 0);
+    var floatingCartLabel = bySelector("span", dom.floatingCart);
+    if (floatingCartLabel) {
+      floatingCartLabel.textContent = lineCount > 0 ? "Finalizar seleção" : "Ver seleção";
+    }
+    dom.floatingCart.setAttribute(
+      "aria-label",
+      lineCount > 0
+        ? "Finalizar seleção, " + lineCount + (lineCount === 1 ? " item" : " itens")
+        : "Abrir seleção"
+    );
     updateFloatingCart();
   }
 
@@ -1618,8 +1684,8 @@
     state.cart.items.splice(index, 1);
     saveCart();
     renderCart();
-    announce(resolved.name + " removido do pedido.");
-    showToast("Item removido", resolved.name + " saiu do seu pedido.", "success");
+    announce(resolved.name + " removido da seleção.");
+    showToast("Item removido", resolved.name + " saiu da sua seleção.", "success");
   }
 
   function bumpCartCount() {
@@ -1630,16 +1696,42 @@
     });
   }
 
-  function buildWhatsAppMessage() {
+  function makeQuoteCode() {
+    var now = new Date();
+    var datePart = String(now.getFullYear()).slice(-2) +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      String(now.getDate()).padStart(2, "0");
+    var randomPart = makeId("quote").replace(/[^A-Za-z0-9]/g, "").slice(-4).toUpperCase();
+    return "FA-" + datePart + "-" + randomPart;
+  }
+
+  function buildWhatsAppMessage(details, quoteCode) {
     var divider = "--------------------------------";
     var lines = [
       "Olá, Fio a Fio.",
       "Gostaria de solicitar um orçamento para os itens abaixo.",
       "",
+      "CÓDIGO: " + quoteCode,
+      "",
       divider,
-      "PEDIDO",
-      divider
+      "DADOS PARA ATENDIMENTO",
+      divider,
+      "Nome: " + details.name,
+      "Cidade/Estado: " + details.city + "/" + details.state,
+      "Recebimento: " + details.fulfillment
     ];
+    if (details.postalCode) {
+      lines.push("CEP: " + details.postalCode);
+    }
+    if (details.notes) {
+      lines.push("Observações: " + details.notes);
+    }
+    lines.push(
+      "",
+      divider,
+      "ITENS SELECIONADOS",
+      divider
+    );
     state.cart.items.forEach(function (item, index) {
       var resolved = resolveCartItem(item);
       lines.push("");
@@ -1651,33 +1743,60 @@
       lines.push(divider);
     });
     lines.push("");
-    lines.push("RESUMO DO PEDIDO");
+    lines.push("RESUMO DA SELEÇÃO");
     lines.push("Itens selecionados: " + state.cart.items.length + (state.cart.items.length === 1 ? " opção" : " opções"));
     lines.push("Quantidade total: " + formatCartQuantitySummary());
     lines.push(divider);
     lines.push("");
-    lines.push("Poderiam confirmar a disponibilidade, os valores e as opções de envio?");
-    lines.push("Nome:");
-    lines.push("Cidade/UF:");
+    lines.push("Podem confirmar disponibilidade, valores e opções de envio?");
     return lines.join("\n");
+  }
+
+  function fillQuoteForm() {
+    var details = state.quoteDetails || normalizeQuoteDetails({});
+    dom.quoteName.value = details.name || "";
+    dom.quoteCity.value = details.city || "";
+    dom.quoteState.value = details.state || "";
+    dom.quoteFulfillment.value = details.fulfillment || "Quero consultar as opções";
+    dom.quotePostalCode.value = details.postalCode || "";
+    dom.quoteNotes.value = details.notes || "";
   }
 
   function checkout() {
     if (!state.cart.items.length) {
-      showToast("Pedido vazio", "Escolha ao menos um tecido antes de finalizar.", "error");
+      showToast("Seleção vazia", "Escolha ao menos um tecido antes de solicitar o orçamento.", "error");
       return;
     }
     var unavailable = state.cart.items.some(function (item) {
       return !resolveCartItem(item).valid;
     });
     if (unavailable) {
-      showToast("Revise o pedido", "Remova as opções que não estão mais disponíveis.", "error");
+      showToast("Revise a seleção", "Remova as opções que não estão mais disponíveis.", "error");
       return;
     }
-    var message = buildWhatsAppMessage();
+    fillQuoteForm();
+    closeDialog(dom.cartDialog);
+    window.setTimeout(function () {
+      openDialog(dom.quoteDialog);
+      dom.quoteName.focus();
+    }, 0);
+  }
+
+  function submitQuote(event) {
+    event.preventDefault();
+    var details = normalizeQuoteDetails({
+      name: dom.quoteName.value,
+      city: dom.quoteCity.value,
+      state: dom.quoteState.value,
+      fulfillment: dom.quoteFulfillment.value,
+      postalCode: dom.quotePostalCode.value,
+      notes: dom.quoteNotes.value
+    });
+    saveQuoteDetails(details);
+    var message = buildWhatsAppMessage(details, makeQuoteCode());
     var url = "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(message);
     if (url.length > 7500) {
-      showToast("Pedido muito extenso", "Divida a seleção em dois pedidos para enviar pelo WhatsApp.", "error");
+      showToast("Orçamento muito extenso", "Divida a seleção em duas solicitações para enviar pelo WhatsApp.", "error");
       return;
     }
     window.location.assign(url);
@@ -1704,9 +1823,9 @@
   function setEditorMode(enabled, openManager) {
     state.editorMode = Boolean(enabled);
     try {
-      sessionStorage.setItem(STORAGE_KEYS.editor, state.editorMode ? "1" : "0");
+      localStorage.setItem(STORAGE_KEYS.editor, state.editorMode ? "1" : "0");
     } catch (error) {
-      // Editor mode still works during this session.
+      // Editor mode still works until this page is closed.
     }
     document.body.classList.toggle("editor-mode", state.editorMode);
     dom.editorBar.hidden = !state.editorMode;
@@ -1724,16 +1843,141 @@
   }
 
   function toggleEditor() {
-    setEditorMode(!state.editorMode, !state.editorMode);
+    if (state.editorMode) {
+      setEditorMode(false, false);
+      return;
+    }
+    openEditorAccess();
   }
 
   function openEditor() {
     if (!state.editorMode) {
-      setEditorMode(true, false);
+      openEditorAccess();
+      return;
     }
     renderEditor();
     switchEditorTab("categories");
     openDialog(dom.editorDialog);
+  }
+
+  function resetEditorAccessForm() {
+    dom.editorAccessForm.reset();
+    dom.editorPassword.type = "password";
+    dom.editorPassword.removeAttribute("aria-invalid");
+    dom.editorAccessError.textContent = "Senha incorreta. Tente novamente.";
+    dom.editorAccessError.hidden = true;
+    dom.editorAccessSubmit.disabled = false;
+    dom.editorAccessSubmit.querySelector("span").textContent = "Entrar no editor";
+    var visibilityButton = bySelector("[data-action='toggle-editor-password']", dom.editorAccessForm);
+    visibilityButton.setAttribute("aria-label", "Mostrar senha");
+    visibilityButton.setAttribute("aria-pressed", "false");
+    bySelector("i", visibilityButton).className = "fa-regular fa-eye";
+  }
+
+  function openEditorAccess() {
+    if (state.editorMode) {
+      openEditor();
+      return;
+    }
+    resetEditorAccessForm();
+    openDialog(dom.editorAccessDialog);
+    window.setTimeout(function () {
+      dom.editorPassword.focus();
+    }, 120);
+  }
+
+  function closeEditorAccess() {
+    closeDialog(dom.editorAccessDialog);
+    resetEditorAccessForm();
+  }
+
+  function toggleEditorPasswordVisibility(button) {
+    var showing = dom.editorPassword.type === "text";
+    dom.editorPassword.type = showing ? "password" : "text";
+    button.setAttribute("aria-label", showing ? "Mostrar senha" : "Ocultar senha");
+    button.setAttribute("aria-pressed", String(!showing));
+    bySelector("i", button).className = showing ? "fa-regular fa-eye" : "fa-regular fa-eye-slash";
+    dom.editorPassword.focus();
+  }
+
+  function bytesToHex(buffer) {
+    return Array.from(new Uint8Array(buffer)).map(function (byte) {
+      return byte.toString(16).padStart(2, "0");
+    }).join("");
+  }
+
+  function verifyEditorPassword(password) {
+    if (!window.crypto || !window.crypto.subtle || typeof TextEncoder === "undefined") {
+      return Promise.resolve(false);
+    }
+    return window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(password)).then(function (digest) {
+      return bytesToHex(digest) === EDITOR_PASSWORD_HASH;
+    });
+  }
+
+  function submitEditorAccess(event) {
+    event.preventDefault();
+    var password = dom.editorPassword.value.trim();
+    dom.editorPassword.removeAttribute("aria-invalid");
+    dom.editorAccessError.hidden = true;
+    dom.editorAccessSubmit.disabled = true;
+    dom.editorAccessSubmit.querySelector("span").textContent = "Verificando…";
+
+    verifyEditorPassword(password).then(function (allowed) {
+      if (!allowed) {
+        dom.editorPassword.setAttribute("aria-invalid", "true");
+        dom.editorAccessError.hidden = false;
+        dom.editorPassword.select();
+        dom.editorAccessForm.classList.remove("is-denied");
+        void dom.editorAccessForm.offsetWidth;
+        dom.editorAccessForm.classList.add("is-denied");
+        return;
+      }
+
+      closeDialog(dom.editorAccessDialog);
+      setEditorMode(true, true);
+      showToast("Editor habilitado", "As ferramentas de edição foram liberadas neste dispositivo.", "success");
+    }).catch(function () {
+      dom.editorAccessError.textContent = "Não foi possível validar a senha neste navegador.";
+      dom.editorAccessError.hidden = false;
+    }).finally(function () {
+      dom.editorAccessSubmit.disabled = false;
+      dom.editorAccessSubmit.querySelector("span").textContent = "Entrar no editor";
+    });
+  }
+
+  function isAtPageEnd() {
+    return Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 48;
+  }
+
+  function cancelEditorHold() {
+    if (editorHoldTimer) {
+      window.clearTimeout(editorHoldTimer);
+      editorHoldTimer = null;
+    }
+    editorHoldPointerId = null;
+  }
+
+  function completeEditorHold() {
+    editorHoldTimer = null;
+    editorHoldPointerId = null;
+    if (!isAtPageEnd()) {
+      return;
+    }
+    if (state.editorMode) {
+      openEditor();
+    } else {
+      openEditorAccess();
+    }
+  }
+
+  function startEditorHold(pointerId) {
+    cancelEditorHold();
+    if (!isAtPageEnd()) {
+      return;
+    }
+    editorHoldPointerId = pointerId;
+    editorHoldTimer = window.setTimeout(completeEditorHold, EDITOR_HOLD_DURATION);
   }
 
   function renderEditor() {
@@ -2028,7 +2272,7 @@
       return product.categoryId === category.id;
     });
     var message = products.length
-      ? "A categoria “" + category.name + "” e seus " + products.length + (products.length === 1 ? " tecido serão excluídos. " : " tecidos serão excluídos. ") + "Itens relacionados também sairão do pedido."
+      ? "A categoria “" + category.name + "” e seus " + products.length + (products.length === 1 ? " tecido serão excluídos. " : " tecidos serão excluídos. ") + "Itens relacionados também sairão da seleção."
       : "A categoria “" + category.name + "” será removida da vitrine.";
     askConfirm("Excluir categoria?", message, async function () {
       var previousCatalog = clone(state.catalog);
@@ -2434,7 +2678,7 @@
     }
     askConfirm(
       "Excluir tecido?",
-      "“" + product.name + "” e suas cores serão removidos. Se estiver no pedido, também será retirado.",
+      "“" + product.name + "” e suas cores serão removidos. Se estiver na seleção, também será retirado.",
       async function () {
         var previousCatalog = clone(state.catalog);
         var previousCart = clone(state.cart);
@@ -2701,6 +2945,14 @@
     if (!dialog || dialog.open) {
       return;
     }
+    if (dialog === dom.cartDialog) {
+      dialog.classList.remove("is-opening");
+      dialog.offsetWidth;
+      dialog.classList.add("is-opening");
+      window.setTimeout(function () {
+        dialog.classList.remove("is-opening");
+      }, 820);
+    }
     dialog.showModal();
     syncDialogBody();
   }
@@ -2776,9 +3028,7 @@
     dom.progress.style.transform = "scaleX(" + Math.min(1, Math.max(0, progress)) + ")";
     dom.siteHeader.classList.toggle("is-scrolled", scrollY > 24);
 
-    var menuOpen = dom.mobileMenu.classList.contains("is-open");
-    var scrollingDown = scrollY > state.lastScrollY;
-    dom.siteHeader.classList.toggle("is-hidden", scrollingDown && scrollY > 260 && !menuOpen);
+    dom.siteHeader.classList.remove("is-hidden");
     state.lastScrollY = Math.max(0, scrollY);
 
     updateFloatingCart();
@@ -2856,6 +3106,12 @@
         toggleEditor();
         toggleMenu(false);
         break;
+      case "close-editor-access":
+        closeEditorAccess();
+        break;
+      case "toggle-editor-password":
+        toggleEditorPasswordVisibility(button);
+        break;
       case "open-editor":
         openEditor();
         break;
@@ -2871,6 +3127,16 @@
         break;
       case "close-cart":
         closeDialog(dom.cartDialog);
+        break;
+      case "close-quote":
+        closeDialog(dom.quoteDialog);
+        break;
+      case "back-to-cart":
+        closeDialog(dom.quoteDialog);
+        window.setTimeout(function () {
+          renderCart();
+          openDialog(dom.cartDialog);
+        }, 0);
         break;
       case "continue-shopping":
         closeDialog(dom.cartDialog);
@@ -2918,7 +3184,8 @@
         break;
       case "edit-category":
         if (!state.editorMode) {
-          setEditorMode(true, false);
+          openEditorAccess();
+          break;
         }
         if (!dom.editorDialog.open) {
           renderEditor();
@@ -2948,7 +3215,8 @@
         break;
       case "edit-product":
         if (!state.editorMode) {
-          setEditorMode(true, false);
+          openEditorAccess();
+          break;
         }
         if (!dom.editorDialog.open) {
           renderEditor();
@@ -3027,7 +3295,17 @@
       var product = findProduct(state.currentProductId);
       if (product) {
         dom.productQuantity.value = formatInputNumber(clampProductQuantity(product, dom.productQuantity.value));
+        updateAddCartButton();
       }
+    });
+
+    dom.productQuantity.addEventListener("input", updateAddCartButton);
+    dom.quoteState.addEventListener("input", function () {
+      dom.quoteState.value = dom.quoteState.value.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 2);
+    });
+    dom.quotePostalCode.addEventListener("input", function () {
+      var digits = dom.quotePostalCode.value.replace(/\D/g, "").slice(0, 8);
+      dom.quotePostalCode.value = digits.length > 5 ? digits.slice(0, 5) + "-" + digits.slice(5) : digits;
     });
 
     document.addEventListener("change", function (event) {
@@ -3101,8 +3379,60 @@
 
     dom.categoryForm.addEventListener("submit", submitCategoryForm);
     dom.productForm.addEventListener("submit", submitProductForm);
+    dom.quoteForm.addEventListener("submit", submitQuote);
+    dom.editorAccessForm.addEventListener("submit", submitEditorAccess);
+    dom.editorPassword.addEventListener("input", function () {
+      dom.editorPassword.removeAttribute("aria-invalid");
+      dom.editorAccessError.hidden = true;
+    });
 
-    [dom.productDialog, dom.cartDialog, dom.editorDialog, dom.confirmDialog].forEach(function (dialog) {
+    dom.editorSecretTrigger.addEventListener("click", function (event) {
+      event.preventDefault();
+    });
+    dom.editorSecretTrigger.addEventListener("pointerdown", function (event) {
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      startEditorHold(event.pointerId);
+      if (editorHoldTimer) {
+        try {
+          dom.editorSecretTrigger.setPointerCapture(event.pointerId);
+        } catch (error) {
+          // Pointer capture is optional; the hold timer still works.
+        }
+      }
+    });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach(function (eventName) {
+      dom.editorSecretTrigger.addEventListener(eventName, function (event) {
+        if (editorHoldPointerId === null || event.pointerId === editorHoldPointerId) {
+          cancelEditorHold();
+        }
+      });
+    });
+    dom.editorSecretTrigger.addEventListener("contextmenu", function (event) {
+      event.preventDefault();
+    });
+    dom.editorSecretTrigger.addEventListener("dragstart", function (event) {
+      event.preventDefault();
+    });
+    dom.editorSecretTrigger.addEventListener("selectstart", function (event) {
+      event.preventDefault();
+    });
+    dom.editorSecretTrigger.addEventListener("keydown", function (event) {
+      if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+        event.preventDefault();
+        startEditorHold(null);
+      }
+    });
+    dom.editorSecretTrigger.addEventListener("keyup", function (event) {
+      if (event.key === " " || event.key === "Enter") {
+        cancelEditorHold();
+      }
+    });
+    dom.editorSecretTrigger.addEventListener("blur", cancelEditorHold);
+
+    [dom.productDialog, dom.cartDialog, dom.quoteDialog, dom.editorAccessDialog, dom.editorDialog, dom.confirmDialog].forEach(function (dialog) {
       dialog.addEventListener("close", syncDialogBody);
       dialog.addEventListener("cancel", function (event) {
         if (dialog === dom.confirmDialog) {
@@ -3125,6 +3455,7 @@
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         closeDialog(dom.cartDialog);
+        closeDialog(dom.quoteDialog);
         bySelector("#tecidos").scrollIntoView({ behavior: "smooth" });
         window.setTimeout(function () {
           dom.search.focus();
@@ -3199,8 +3530,9 @@
     cacheDom();
     state.catalog = loadCatalog();
     state.cart = loadCart();
+    state.quoteDetails = loadQuoteDetails();
     try {
-      state.editorMode = sessionStorage.getItem(STORAGE_KEYS.editor) === "1";
+      state.editorMode = localStorage.getItem(STORAGE_KEYS.editor) === "1";
     } catch (error) {
       state.editorMode = false;
     }

@@ -14,7 +14,7 @@ pasta por HTTP/localhost ao publicar o projeto.
 - catálogo por categorias, busca e cores;
 - seleção de quantidade por metro, unidade ou rolo;
 - carrinho persistente no navegador;
-- pedido formatado automaticamente para o WhatsApp +55 19 99762-5253;
+- solicitação de orçamento formatada automaticamente para o WhatsApp +55 19 99762-5253;
 - editor local hierárquico: categorias e, dentro delas, seus produtos;
 - criação, edição e exclusão com confirmações;
 - upload de fotos JPG, PNG ou WebP com redimensionamento e otimização;
@@ -35,7 +35,8 @@ conectar a vitrine a um backend ou CMS com autenticação.
 ## Arquivos principais
 
 - **index.html**: estrutura, conteúdo e metadados;
-- **styles.css**: identidade visual, animações e responsividade;
+- **styles/legacy/**: estilos históricos preservados em ordem para evitar regressões;
+- **styles/components/**: hero premium, compra mobile e fluxo de orçamento;
 - **app.js**: catálogo, carrinho, WhatsApp e editor;
 - **assets/hero-fio-a-fio.png**: imagem institucional da abertura;
 - **assets/fioafiologo.svg**: logo oficial fornecida para o projeto;

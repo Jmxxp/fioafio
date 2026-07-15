@@ -1,0 +1,316 @@
+/* Premium cart drawer: right-origin motion and staged content entrance. */
+
+.floating-cart {
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: auto;
+  display: flex;
+  min-height: 58px;
+  justify-content: center;
+  border-radius: 16px;
+  background: #090a0b;
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.46),
+    0 0 0 1px rgba(226, 190, 72, 0.08);
+  transition:
+    transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 220ms ease,
+    background 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.floating-cart:not(.has-items) {
+  width: 58px;
+  padding: 0;
+}
+
+.floating-cart:not(.has-items) span,
+.floating-cart:not(.has-items) b {
+  display: none;
+}
+
+.floating-cart.has-items {
+  position: fixed;
+  overflow: hidden;
+  width: auto;
+  min-width: 218px;
+  gap: 11px;
+  padding: 0 10px 0 18px;
+  border-color: #f2ce52;
+  background: linear-gradient(115deg, #a66e05 0%, #e9c13c 42%, #f3d45e 58%, #b67c08 100%);
+  background-size: 180% 100%;
+  box-shadow:
+    0 16px 44px rgba(0, 0, 0, 0.48),
+    0 0 0 1px rgba(255, 226, 117, 0.52),
+    0 0 30px rgba(231, 187, 44, 0.34);
+  animation: premium-floating-cart-glow 1.8s ease-in-out infinite;
+}
+
+.floating-cart.has-items::after {
+  position: absolute;
+  top: -45%;
+  bottom: -45%;
+  left: -38%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, rgba(255, 249, 211, 0.72), transparent);
+  content: "";
+  pointer-events: none;
+  transform: skewX(-18deg);
+  animation: premium-floating-cart-shine 2.4s ease-in-out infinite;
+}
+
+.floating-cart.has-items > * {
+  position: relative;
+  z-index: 1;
+}
+
+.floating-cart.has-items span {
+  display: inline;
+  font-size: 0.76rem;
+  letter-spacing: -0.01em;
+}
+
+.floating-cart.has-items b {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+}
+
+.floating-cart.is-visible:hover {
+  transform: translateY(-3px);
+}
+
+.floating-cart:focus-visible {
+  outline: 2px solid var(--premium-gold-soft);
+  outline-offset: 4px;
+}
+
+.has-cart-items .toast-region {
+  bottom: 100px;
+}
+
+.cart-dialog {
+  inset: 0 0 0 auto;
+  width: min(480px, 100vw);
+  height: 100dvh;
+  margin: 0;
+  overflow: hidden;
+}
+
+.cart-dialog[open] {
+  animation: premium-cart-slide-right-to-left 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform;
+}
+
+.cart-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  animation: premium-cart-backdrop-in 320ms ease-out both;
+}
+
+.cart-shell {
+  border-left-color: rgba(226, 190, 72, 0.2);
+  background: #080a0b;
+  box-shadow: -30px 0 90px rgba(0, 0, 0, 0.56);
+  animation: none;
+}
+
+.cart-shell .dialog-header {
+  background: #080a0b;
+  backdrop-filter: none;
+}
+
+.cart-dialog.is-opening .dialog-header > *,
+.cart-dialog.is-opening .cart-empty > *,
+.cart-dialog.is-opening .cart-footer > * {
+  opacity: 0;
+  animation: premium-cart-content-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cart-dialog.is-opening .dialog-header > *:first-child {
+  animation-delay: 150ms;
+}
+
+.cart-dialog.is-opening .dialog-header > *:last-child {
+  animation-delay: 210ms;
+}
+
+.cart-dialog.is-opening .cart-empty > *:nth-child(1) {
+  animation-delay: 170ms;
+}
+
+.cart-dialog.is-opening .cart-empty > *:nth-child(2) {
+  animation-delay: 220ms;
+}
+
+.cart-dialog.is-opening .cart-empty > *:nth-child(3) {
+  animation-delay: 270ms;
+}
+
+.cart-dialog.is-opening .cart-empty > *:nth-child(4) {
+  animation-delay: 320ms;
+}
+
+.cart-dialog.is-opening .cart-item {
+  opacity: 0;
+  animation: premium-cart-item-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(170ms + (var(--cart-index, 0) * 55ms));
+}
+
+.cart-dialog.is-opening .cart-footer > *:nth-child(1) {
+  animation-delay: 260ms;
+}
+
+.cart-dialog.is-opening .cart-footer > *:nth-child(2) {
+  animation-delay: 300ms;
+}
+
+.cart-dialog.is-opening .cart-footer > *:nth-child(3) {
+  animation-delay: 340ms;
+}
+
+.cart-dialog.is-opening .cart-footer > *:nth-child(4) {
+  animation-delay: 380ms;
+}
+
+@keyframes premium-cart-slide-right-to-left {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes premium-floating-cart-glow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    box-shadow:
+      0 16px 44px rgba(0, 0, 0, 0.48),
+      0 0 0 1px rgba(255, 226, 117, 0.42),
+      0 0 22px rgba(231, 187, 44, 0.24);
+  }
+
+  50% {
+    background-position: 100% 50%;
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.52),
+      0 0 0 4px rgba(238, 199, 70, 0.14),
+      0 0 38px rgba(240, 199, 61, 0.48);
+  }
+}
+
+@keyframes premium-floating-cart-shine {
+  0%,
+  28% {
+    left: -38%;
+    opacity: 0;
+  }
+
+  38% {
+    opacity: 0.9;
+  }
+
+  62%,
+  100% {
+    left: 122%;
+    opacity: 0;
+  }
+}
+
+@keyframes premium-cart-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes premium-cart-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes premium-cart-item-enter {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .floating-cart {
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    min-height: 54px;
+    border-radius: 14px;
+  }
+
+  .floating-cart:not(.has-items) {
+    width: 54px;
+  }
+
+  .floating-cart.has-items {
+    min-width: 0;
+    padding: 0 10px 0 15px;
+  }
+
+  .floating-cart.has-items span {
+    font-size: 0.72rem;
+  }
+
+  .floating-cart.has-items b {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+  }
+
+  .has-cart-items .toast-region {
+    right: 12px;
+    bottom: max(82px, calc(env(safe-area-inset-bottom) + 76px));
+  }
+
+  .cart-dialog {
+    width: 100vw;
+  }
+
+  .cart-shell {
+    border-left: 0;
+    background: #080a0b;
+    box-shadow: none;
+  }
+
+  .cart-shell .dialog-header,
+  .cart-footer {
+    background: #080a0b;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-dialog[open],
+  .cart-shell,
+  .floating-cart.has-items,
+  .floating-cart.has-items::after,
+  .cart-dialog::backdrop,
+  .cart-dialog.is-opening .dialog-header > *,
+  .cart-dialog.is-opening .cart-empty > *,
+  .cart-dialog.is-opening .cart-item,
+  .cart-dialog.is-opening .cart-footer > * {
+    opacity: 1;
+    animation: none;
+    transform: none;
+  }
+}

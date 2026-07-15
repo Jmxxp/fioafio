@@ -1,0 +1,222 @@
+/* Compact customer details step before the WhatsApp handoff. */
+
+.quote-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.quote-shell {
+  display: flex;
+  max-height: min(820px, calc(100svh - 32px));
+  overflow: hidden;
+  flex-direction: column;
+  border: 1px solid rgba(217, 180, 59, 0.22);
+  border-radius: 22px;
+  background: #0b0d0f;
+  box-shadow: 0 38px 120px rgba(0, 0, 0, 0.62);
+  animation: modal-up 420ms var(--ease) both;
+}
+
+.quote-header {
+  align-items: center;
+  padding: 29px 30px 24px;
+}
+
+.quote-header > div {
+  min-width: 0;
+}
+
+.quote-header h2 {
+  font-size: clamp(2rem, 4vw, 2.8rem);
+}
+
+.quote-header > div > p:last-child {
+  max-width: 520px;
+  margin: 9px 0 0;
+  color: #8f8b83;
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.quote-form {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 26px 30px 30px;
+}
+
+.quote-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 17px;
+}
+
+.quote-field {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.quote-field-wide {
+  grid-column: 1 / -1;
+}
+
+.quote-field-city {
+  grid-column: span 1;
+}
+
+.quote-field-state {
+  width: 112px;
+  justify-self: start;
+}
+
+.quote-field > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #d1cdc5;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.quote-field > span b {
+  color: #6f6b64;
+  font-size: 0.53rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quote-field input,
+.quote-field select,
+.quote-field textarea {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 11px;
+  outline: 0;
+  background: #111416;
+  color: #f1eee7;
+  font-size: 0.82rem;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.quote-field textarea {
+  min-height: 104px;
+  resize: vertical;
+  padding-block: 13px;
+  line-height: 1.55;
+}
+
+.quote-field input::placeholder,
+.quote-field textarea::placeholder {
+  color: #66635d;
+}
+
+.quote-field input:focus,
+.quote-field select:focus,
+.quote-field textarea:focus {
+  border-color: rgba(217, 180, 59, 0.66);
+  background: #131719;
+  box-shadow: 0 0 0 4px rgba(217, 180, 59, 0.08);
+}
+
+.quote-form-footer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.quote-form-footer > p {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 0 15px;
+  color: #77746d;
+  font-size: 0.64rem;
+  line-height: 1.55;
+}
+
+.quote-form-footer > p i {
+  margin-top: 2px;
+  color: #c9a32f;
+}
+
+.quote-submit {
+  min-height: 56px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 620px) {
+  .quote-dialog {
+    width: 100vw;
+    height: 100svh;
+    margin: 0;
+  }
+
+  .quote-shell {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .quote-header {
+    position: sticky;
+    z-index: 4;
+    top: 0;
+    align-items: flex-start;
+    padding: max(20px, env(safe-area-inset-top)) 18px 18px;
+    background: rgba(11, 13, 15, 0.96);
+    backdrop-filter: blur(18px);
+  }
+
+  .quote-header h2 {
+    font-size: 2rem;
+  }
+
+  .quote-header > div > p:last-child {
+    padding-right: 6px;
+    font-size: 0.7rem;
+  }
+
+  .quote-form {
+    padding: 21px 16px max(24px, env(safe-area-inset-bottom));
+  }
+
+  .quote-form-grid {
+    grid-template-columns: minmax(0, 1fr) 92px;
+    gap: 15px 11px;
+  }
+
+  .quote-field,
+  .quote-field-city,
+  .quote-field-wide {
+    grid-column: 1 / -1;
+  }
+
+  .quote-field-city {
+    grid-column: 1;
+  }
+
+  .quote-field-state {
+    grid-column: 2;
+    width: auto;
+  }
+
+  .quote-field input,
+  .quote-field select {
+    min-height: 53px;
+  }
+
+  .quote-form-footer {
+    position: sticky;
+    bottom: 0;
+    margin-inline: -16px;
+    padding: 17px 16px max(17px, env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(11, 13, 15, 0.88), #0b0d0f 20%);
+  }
+}
+

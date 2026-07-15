@@ -6,20 +6,30 @@
     <meta name="theme-color" content="#030405" />
     <meta
       name="description"
-      content="Fio a Fio — casa de tecidos em São João da Boa Vista desde 2013. Escolha produtos, cores e quantidades e envie seu pedido pelo WhatsApp."
+      content="Fio a Fio — casa de tecidos em São João da Boa Vista desde 2013. Escolha produtos, cores e quantidades e solicite seu orçamento pelo WhatsApp."
     />
     <meta property="og:title" content="Fio a Fio | Casa de Tecidos" />
     <meta
       property="og:description"
-      content="Escolha tecidos, cores e monte seu pedido pelo WhatsApp."
+      content="Escolha tecidos e cores e solicite seu orçamento pelo WhatsApp."
     />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="assets/hero-fio-a-fio.png" />
-    <title>Fio a Fio | Casa de Tecidos e Pedidos para todo o Brasil</title>
+    <title>Fio a Fio | Tecidos selecionados e orçamentos para todo o Brasil</title>
+    <link rel="icon" href="assets/fioafiologo.svg" type="image/svg+xml" />
     <link rel="preload" href="assets/hero-fio-a-fio.png" as="image" />
     <link rel="preload" href="assets/fioafiologo.svg" as="image" type="image/svg+xml" />
     <link rel="stylesheet" href="assets/fontawesome/css/all.min.css" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles/legacy/foundation.css" />
+    <link rel="stylesheet" href="styles/legacy/responsive.css" />
+    <link rel="stylesheet" href="styles/legacy/storefront.css" />
+    <link rel="stylesheet" href="styles/legacy/interactions.css" />
+    <link rel="stylesheet" href="styles/components/premium-shell.css" />
+    <link rel="stylesheet" href="styles/components/mobile-shopping.css" />
+    <link rel="stylesheet" href="styles/components/quote-flow.css" />
+    <link rel="stylesheet" href="styles/components/cart-drawer.css" />
+    <link rel="stylesheet" href="styles/components/company-card.css" />
+    <link rel="stylesheet" href="styles/components/editor-access.css" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -72,22 +82,13 @@
             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
           </button>
           <button
-            class="editor-trigger"
-            type="button"
-            data-action="toggle-editor"
-            aria-pressed="false"
-          >
-            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
-            <span>Editor</span>
-          </button>
-          <button
             class="cart-trigger"
             type="button"
             data-action="open-cart"
-            aria-label="Abrir pedido, 0 opções"
+            aria-label="Abrir seleção, 0 opções"
           >
             <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-            <span class="cart-trigger-label">Pedido</span>
+            <span class="cart-trigger-label">Seleção</span>
             <span class="cart-count" data-cart-count aria-label="0 itens">0</span>
           </button>
           <button
@@ -115,7 +116,6 @@
         <a href="#como-pedir">Como pedir</a>
         <a href="#sobre">Empresa</a>
         <a href="#contato">Contato</a>
-        <button type="button" data-action="toggle-editor">Abrir editor local</button>
       </nav>
     </header>
 
@@ -137,14 +137,18 @@
                 class="official-logo hero-official-logo"
                 src="assets/fioafiologo.svg"
                 alt="Fio a Fio — Tecidos e acessórios"
-                width="360"
-                height="151"
+                width="300"
+                height="125"
               />
             </div>
             <h1 id="hero-title" class="reveal">
-              <span class="hero-title-line">Seu projeto começa com</span>
-              <em>o tecido certo.</em>
+              <span class="hero-title-line">Seu projeto começa</span>
+              <em>no tecido certo.</em>
             </h1>
+            <p class="hero-lead reveal">
+              Explore texturas, escolha cores e metragens e receba um orçamento
+              conferido por uma pessoa da nossa equipe.
+            </p>
             <div class="hero-actions reveal">
               <a class="button button-gold" href="#categorias">
                 Ver catálogo
@@ -162,25 +166,8 @@
             </div>
             <p class="hero-order-note reveal">
               <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-              Monte sua lista no site e envie tudo em uma única mensagem.
+              Monte sua seleção no site e envie tudo em uma única mensagem.
             </p>
-          </div>
-
-          <div class="hero-proof reveal" aria-label="Diferenciais da Fio a Fio">
-            <div>
-              <strong>Desde 2013</strong>
-              <span>Experiência no atendimento</span>
-            </div>
-            <i aria-hidden="true"></i>
-            <div>
-              <strong>Todo o Brasil</strong>
-              <span>Envios para todos os estados</span>
-            </div>
-            <i aria-hidden="true"></i>
-            <div>
-              <strong>Atendimento humano</strong>
-              <span>Conferência antes de fechar</span>
-            </div>
           </div>
         </div>
       </section>
@@ -214,7 +201,7 @@
         <div class="page-shell">
           <div class="section-heading catalog-heading heading-minimal reveal">
             <div>
-              <h2>Monte seu pedido de <em>tecidos</em></h2>
+              <h2>Monte sua seleção de <em>tecidos</em></h2>
             </div>
           </div>
 
@@ -278,7 +265,7 @@
             </span>
             <div>
               <strong>Envios nacionais</strong>
-              <span>Atendemos pedidos em todo o Brasil.</span>
+              <span>Enviamos tecidos para todo o Brasil.</span>
             </div>
           </article>
           <article class="benefit-item reveal">
@@ -307,7 +294,7 @@
           <div class="section-heading centered reveal">
             <div>
               <p class="eyebrow">Processo de compra</p>
-              <h2>Faça seu pedido <span>em <em>três etapas</em></span></h2>
+              <h2>Solicite seu orçamento <span>em <em>três etapas</em></span></h2>
             </div>
             <p>
               O site organiza sua seleção e nossa equipe cuida da conferência
@@ -336,8 +323,8 @@
               <div class="step-icon" aria-hidden="true">
                 <i class="fa-brands fa-whatsapp"></i>
               </div>
-              <h3>Envie para conferência</h3>
-              <p>Finalize pelo WhatsApp para confirmar estoque, valores e entrega.</p>
+              <h3>Solicite o orçamento</h3>
+              <p>Envie pelo WhatsApp para confirmar estoque, valores e entrega.</p>
             </li>
           </ol>
         </div>
@@ -346,11 +333,11 @@
       <section class="story-section section-pad" id="sobre">
         <div class="page-shell story-grid">
           <div class="story-copy reveal">
-            <h2>Atendimento responsável para pedidos de <em>todo o Brasil.</em></h2>
+            <h2>Atendimento responsável para projetos de <em>todo o Brasil.</em></h2>
             <p class="story-lead">
               A Fio a Fio é uma casa de tecidos de São João da Boa Vista fundada
               em 2013. Unimos seleção criteriosa, orientação próxima e um processo
-              simples para atender cada pedido com segurança.
+              simples para atender cada projeto com segurança.
             </p>
             <p>
               Seja para moda, decoração ou produção autoral, ajudamos você a
@@ -358,39 +345,45 @@
             </p>
           </div>
 
-          <aside class="company-panel reveal" aria-label="Informações da Fio a Fio">
-            <img
-              class="official-logo company-official-logo"
-              src="assets/fioafiologo.svg"
-              alt="Fio a Fio — Tecidos e acessórios"
-              width="300"
-              height="125"
-              loading="lazy"
-            />
-            <p>Uma empresa local preparada para atender projetos em escala nacional.</p>
-            <ul class="company-facts">
-              <li>
-                <i class="fa-solid fa-building" aria-hidden="true"></i>
-                <span><strong>Fundação</strong>2013</span>
-              </li>
-              <li>
-                <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-                <span><strong>Endereço</strong>Rua Getúlio Vargas, 321</span>
-              </li>
-              <li>
-                <i class="fa-solid fa-city" aria-hidden="true"></i>
-                <span><strong>Cidade</strong>São João da Boa Vista — SP</span>
-              </li>
-            </ul>
-            <a
-              class="button button-outline"
-              href="https://www.google.com/maps/search/?api=1&query=Rua+Getulio+Vargas+321+Sao+Joao+da+Boa+Vista+SP"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Ver localização
-              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-            </a>
+          <aside class="company-panel reveal" aria-label="Localização da Fio a Fio">
+            <figure class="company-storefront">
+              <div class="company-storefront-media">
+                <img
+                  src="FACHADA.jpeg"
+                  alt="Fachada da loja Fio a Fio em São João da Boa Vista"
+                  width="1328"
+                  height="1600"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+
+              <figcaption class="company-location">
+                <div class="company-location-details">
+                  <div class="company-location-item">
+                    <small>Cidade</small>
+                    <strong>São João da Boa Vista — SP</strong>
+                  </div>
+                  <div class="company-location-item">
+                    <small>Endereço</small>
+                    <strong>Rua Getúlio Vargas, 321</strong>
+                  </div>
+                </div>
+
+                <a
+                  class="company-map-link"
+                  href="https://maps.app.goo.gl/ani6REh5SuSNLpd67?g_st=ac"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Abrir localização da Fio a Fio no Google Maps"
+                >
+                  <span>Abrir no Google Maps</span>
+                  <span class="company-map-icon" aria-hidden="true">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                  </span>
+                </a>
+              </figcaption>
+            </figure>
           </aside>
         </div>
       </section>
@@ -400,7 +393,7 @@
           <div class="contact-card reveal">
             <div class="contact-copy">
               <p class="eyebrow">Atendimento</p>
-              <h2>Vamos organizar seu próximo <em>pedido?</em></h2>
+              <h2>Vamos organizar seu próximo <em>orçamento?</em></h2>
               <p class="contact-lead">
                 Fale com a equipe para tirar dúvidas ou envie o carrinho pronto.
                 Respondemos com a confirmação de disponibilidade, valores e entrega.
@@ -450,7 +443,7 @@
               </ol>
               <p class="contact-service-note">
                 <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
-                Nenhum pedido é fechado sem sua confirmação.
+                Nenhuma compra é fechada sem sua confirmação.
               </p>
             </aside>
           </div>
@@ -461,7 +454,12 @@
     <footer class="site-footer">
       <div class="page-shell">
         <div class="footer-top">
-          <a class="brand footer-brand" href="#inicio" aria-label="Fio a Fio — voltar ao início">
+          <button
+            class="brand footer-brand editor-secret-trigger"
+            type="button"
+            data-editor-secret-trigger
+            aria-label="Fio a Fio"
+          >
             <img
               class="official-logo footer-official-logo"
               src="assets/fioafiologo.svg"
@@ -469,8 +467,9 @@
               width="220"
               height="92"
               loading="lazy"
+              draggable="false"
             />
-          </a>
+          </button>
           <p>
             Tecidos selecionados e atendimento<br />
             comercial para todo o Brasil.
@@ -485,7 +484,6 @@
         <div class="footer-bottom">
           <p>© <span data-current-year></span> Fio a Fio. Todos os direitos reservados.</p>
           <p>Rua Getúlio Vargas, 321 • São João da Boa Vista — SP</p>
-          <button type="button" data-action="toggle-editor">Editor local</button>
         </div>
       </div>
     </footer>
@@ -494,12 +492,12 @@
       class="floating-cart"
       type="button"
       data-action="open-cart"
-      aria-label="Abrir pedido"
+      aria-label="Abrir seleção"
       aria-hidden="true"
       tabindex="-1"
     >
       <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-      <span>Ver pedido</span>
+      <span>Ver seleção</span>
       <b data-cart-count>0</b>
     </button>
 
@@ -548,7 +546,7 @@
           </div>
 
           <button class="button button-gold add-cart-button" type="button" data-action="add-to-cart" disabled>
-            <span>Adicionar ao pedido</span>
+            <span>Escolha uma cor</span>
             <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
           </button>
           <p class="availability-note">
@@ -568,9 +566,9 @@
         <header class="dialog-header">
           <div>
             <p class="eyebrow">Sua seleção</p>
-            <h2 id="cart-dialog-title">Meu pedido <b data-cart-lines-label></b></h2>
+            <h2 id="cart-dialog-title">Minha seleção <b data-cart-lines-label></b></h2>
           </div>
-          <button class="dialog-close" type="button" data-action="close-cart" aria-label="Fechar pedido">
+          <button class="dialog-close" type="button" data-action="close-cart" aria-label="Fechar seleção">
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
           </button>
         </header>
@@ -580,7 +578,7 @@
             <div class="empty-bag" aria-hidden="true">
               <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
             </div>
-            <h3>Seu pedido está vazio</h3>
+            <h3>Sua seleção está vazia</h3>
             <p>Explore os tecidos e escolha as cores que combinam com seu projeto.</p>
             <button class="button button-outline" type="button" data-action="continue-shopping">
               Explorar tecidos
@@ -595,14 +593,187 @@
           <p>Valores, estoque e entrega serão confirmados no atendimento.</p>
           <button class="button whatsapp-checkout" type="button" data-action="checkout">
             <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
-            Finalizar pelo WhatsApp
-            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+            Solicitar orçamento
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
           </button>
           <button class="continue-link" type="button" data-action="continue-shopping">
             Continuar escolhendo
           </button>
         </footer>
       </div>
+    </dialog>
+
+    <dialog
+      class="quote-dialog app-dialog"
+      data-quote-dialog
+      aria-labelledby="quote-dialog-title"
+    >
+      <div class="quote-shell">
+        <header class="dialog-header quote-header">
+          <div>
+            <p class="eyebrow">Última etapa</p>
+            <h2 id="quote-dialog-title">Prepare seu orçamento</h2>
+            <p>Preencha apenas o essencial para a equipe responder com mais agilidade.</p>
+          </div>
+          <button class="dialog-close" type="button" data-action="close-quote" aria-label="Fechar formulário">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </header>
+
+        <form class="quote-form" data-quote-form>
+          <div class="quote-form-grid">
+            <label class="quote-field quote-field-wide">
+              <span>Seu nome <b>obrigatório</b></span>
+              <input
+                type="text"
+                data-quote-name
+                name="customerName"
+                maxlength="80"
+                autocomplete="name"
+                placeholder="Como podemos chamar você?"
+                required
+              />
+            </label>
+
+            <label class="quote-field quote-field-city">
+              <span>Cidade <b>obrigatório</b></span>
+              <input
+                type="text"
+                data-quote-city
+                name="customerCity"
+                maxlength="80"
+                autocomplete="address-level2"
+                placeholder="Sua cidade"
+                required
+              />
+            </label>
+
+            <label class="quote-field quote-field-state">
+              <span>Estado <b>obrigatório</b></span>
+              <input
+                type="text"
+                data-quote-state
+                name="customerState"
+                maxlength="2"
+                minlength="2"
+                autocomplete="address-level1"
+                placeholder="SP"
+                pattern="[A-Za-z]{2}"
+                autocapitalize="characters"
+                required
+              />
+            </label>
+
+            <label class="quote-field">
+              <span>Como deseja receber?</span>
+              <select data-quote-fulfillment name="fulfillment">
+                <option value="Quero consultar as opções">Quero consultar as opções</option>
+                <option value="Entrega">Entrega</option>
+                <option value="Retirada na loja">Retirada na loja</option>
+              </select>
+            </label>
+
+            <label class="quote-field">
+              <span>CEP <b>opcional</b></span>
+              <input
+                type="text"
+                data-quote-postal-code
+                name="postalCode"
+                maxlength="9"
+                inputmode="numeric"
+                autocomplete="postal-code"
+                placeholder="00000-000"
+              />
+            </label>
+
+            <label class="quote-field quote-field-wide">
+              <span>Observações <b>opcional</b></span>
+              <textarea
+                data-quote-notes
+                name="notes"
+                maxlength="500"
+                rows="4"
+                placeholder="Conte sobre prazo, aplicação do tecido ou qualquer detalhe importante."
+              ></textarea>
+            </label>
+          </div>
+
+          <div class="quote-form-footer">
+            <p>
+              <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+              Seus dados serão incluídos apenas na mensagem que você revisar no WhatsApp.
+            </p>
+            <button class="button whatsapp-checkout quote-submit" type="submit">
+              <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+              Abrir orçamento no WhatsApp
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+            </button>
+            <button class="continue-link" type="button" data-action="back-to-cart">
+              Voltar para a seleção
+            </button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog
+      class="editor-access-dialog app-dialog"
+      data-editor-access-dialog
+      aria-labelledby="editor-access-title"
+      aria-describedby="editor-access-description"
+    >
+      <form class="editor-access-shell" data-editor-access-form novalidate>
+        <button
+          class="dialog-close editor-access-close"
+          type="button"
+          data-action="close-editor-access"
+          aria-label="Fechar autenticação"
+        >
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+
+        <span class="editor-access-icon" aria-hidden="true">
+          <i class="fa-solid fa-lock"></i>
+        </span>
+        <p class="eyebrow">Área restrita</p>
+        <h2 id="editor-access-title">Acesso ao editor</h2>
+        <p id="editor-access-description">
+          Digite a senha para habilitar as ferramentas de edição neste dispositivo.
+        </p>
+
+        <label class="editor-password-field">
+          <span>Senha</span>
+          <span class="editor-password-control">
+            <input
+              type="password"
+              name="editor-password"
+              data-editor-password
+              inputmode="numeric"
+              autocomplete="current-password"
+              maxlength="8"
+              required
+              aria-describedby="editor-access-error"
+            />
+            <button
+              type="button"
+              data-action="toggle-editor-password"
+              aria-label="Mostrar senha"
+              aria-pressed="false"
+            >
+              <i class="fa-regular fa-eye" aria-hidden="true"></i>
+            </button>
+          </span>
+        </label>
+
+        <p class="editor-access-error" id="editor-access-error" data-editor-access-error role="alert" hidden>
+          Senha incorreta. Tente novamente.
+        </p>
+
+        <button class="editor-access-submit" type="submit" data-editor-access-submit>
+          <span>Entrar no editor</span>
+          <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </button>
+      </form>
     </dialog>
 
     <dialog
