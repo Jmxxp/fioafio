@@ -176,7 +176,7 @@
         <div class="page-shell">
           <p>
             <span class="editor-status-dot"></span>
-            <span data-editor-bar-title>Modo editor local ativo</span>
+            <span data-editor-bar-title>Modo editor ativo</span>
             <small data-editor-bar-detail>As mudanças ficam salvas neste navegador.</small>
           </p>
           <div>
@@ -663,9 +663,9 @@
       <div class="editor-shell">
         <header class="editor-header">
           <div>
-            <p class="eyebrow" data-editor-mode-label>Editor local</p>
+            <p class="eyebrow" data-editor-mode-label>Editor conectado</p>
             <h2 id="editor-dialog-title">Gerenciar vitrine</h2>
-            <p data-editor-mode-description>Personalize o catálogo salvo neste navegador.</p>
+            <p data-editor-mode-description>Cadastre categorias e produtos diretamente no banco.</p>
           </div>
           <button class="dialog-close" type="button" data-action="close-editor" aria-label="Fechar editor">
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -675,10 +675,9 @@
         <div class="editor-notice">
           <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
           <p>
-            <strong data-editor-notice-title>Este é um editor local.</strong>
+            <strong data-editor-notice-title>Catálogo conectado ao Supabase.</strong>
             <span data-editor-notice-text>
-              Alterações aparecem somente neste dispositivo. Exporte o backup JSON para
-              guardar ou transferir o catálogo com as fotos.
+              Categorias, produtos e fotos são publicados para todos os visitantes.
             </span>
           </p>
         </div>
@@ -693,17 +692,6 @@
             data-editor-tab="categories"
           >
             Categorias <span data-editor-category-count>0</span>
-          </button>
-          <button
-            id="editor-tab-data"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="editor-panel-data"
-            tabindex="-1"
-            data-editor-tab="data"
-          >
-            Dados
           </button>
         </div>
 
@@ -741,10 +729,6 @@
                   aria-describedby="category-name-error"
                 />
                 <small id="category-name-error" data-error-for="category-name" role="status"></small>
-              </label>
-              <label>
-                <span>Descrição curta</span>
-                <textarea name="description" maxlength="180" rows="3" placeholder="Uma frase sobre esta coleção"></textarea>
               </label>
               <div class="photo-editor-field" data-category-photo-field>
                 <div class="photo-editor-preview" data-category-photo-preview>
@@ -815,35 +799,18 @@
                 <button type="button" data-action="cancel-product-form">Cancelar</button>
               </div>
               <input type="hidden" name="id" />
-              <div class="form-grid-2">
-                <label>
-                  <span>Nome do tecido</span>
-                  <input
-                    name="name"
-                    required
-                    maxlength="80"
-                    placeholder="Ex.: Linho Natural"
-                    aria-describedby="product-name-error"
-                  />
-                  <small id="product-name-error" data-error-for="product-name" role="status"></small>
-                </label>
-                <label>
-                  <span>Categoria</span>
-                  <select name="categoryId" required data-category-select></select>
-                </label>
-              </div>
               <label>
-                <span>Descrição</span>
-                <textarea name="description" maxlength="300" rows="3" placeholder="Toque, caimento e usos sugeridos"></textarea>
+                <span>Nome do tecido</span>
+                <input
+                  name="name"
+                  required
+                  maxlength="80"
+                  placeholder="Ex.: Linho Natural"
+                  aria-describedby="product-name-error"
+                />
+                <small id="product-name-error" data-error-for="product-name" role="status"></small>
               </label>
-              <label>
-                <span>Unidade</span>
-                <select name="unit">
-                  <option value="metro">Metro</option>
-                  <option value="unidade">Unidade</option>
-                  <option value="rolo">Rolo</option>
-                </select>
-              </label>
+              <select name="categoryId" required data-category-select hidden aria-label="Categoria do produto"></select>
               <div class="photo-editor-field" data-product-photo-field>
                 <div class="photo-editor-preview" data-product-photo-preview>
                   <i class="fa-solid fa-image" aria-hidden="true"></i>
@@ -871,51 +838,6 @@
             </form>
           </section>
 
-          <section
-            id="editor-panel-data"
-            class="editor-panel data-panel"
-            data-editor-panel="data"
-            role="tabpanel"
-            aria-labelledby="editor-tab-data"
-            hidden
-          >
-            <div class="editor-panel-head">
-              <div>
-                <h3>Dados e segurança</h3>
-                <p>Faça backup, transfira ou restaure a vitrine.</p>
-              </div>
-            </div>
-            <div class="data-actions-grid">
-              <article>
-                <span class="data-icon">
-                  <i class="fa-solid fa-download" aria-hidden="true"></i>
-                </span>
-                <div><h4>Exportar backup</h4><p>Baixe uma cópia JSON das categorias, produtos e fotos.</p></div>
-                <button type="button" data-action="export-catalog">Exportar backup</button>
-              </article>
-              <article data-local-only-action>
-                <span class="data-icon">
-                  <i class="fa-solid fa-upload" aria-hidden="true"></i>
-                </span>
-                <div><h4>Importar backup</h4><p>Restaure um backup JSON completo neste navegador.</p></div>
-                <label class="file-button">
-                  Importar JSON
-                  <input type="file" accept="application/json,.json" data-import-input />
-                </label>
-              </article>
-              <article data-local-only-action>
-                <span class="data-icon">
-                  <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
-                </span>
-                <div><h4>Restaurar demonstração</h4><p>Apaga as edições locais e volta ao catálogo inicial.</p></div>
-                <button class="danger-text-button" type="button" data-action="reset-catalog">Restaurar original</button>
-              </article>
-            </div>
-            <div class="catalog-stats">
-              <div><span data-stat-categories>0</span><small>categorias</small></div>
-              <div><span data-stat-products>0</span><small>tecidos</small></div>
-            </div>
-          </section>
         </div>
       </div>
     </dialog>

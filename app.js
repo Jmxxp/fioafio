@@ -283,6 +283,15 @@
     ]
   };
 
+  DEFAULT_CATALOG = {
+    schemaVersion: 2,
+    revision: 1,
+    imageSeedVersion: 0,
+    updatedAt: "2026-07-24T00:00:00.000Z",
+    categories: [],
+    products: []
+  };
+
   var state = {
     catalog: null,
     cart: { schemaVersion: 1, items: [] },
@@ -317,6 +326,48 @@
 
   function usingBackend() {
     return Boolean(state.backendConfigured && backend());
+  }
+
+  function friendlyDatabaseError(error, fallback) {
+    var status = Number(error && (error.status || error.statusCode || (error.context && error.context.status)));
+    var code = String(error && error.code || "").toUpperCase();
+    var message = String(error && error.message || "");
+    var normalized = message.toLowerCase();
+
+    if (
+      status === 401 ||
+      status === 403 ||
+      code === "42501" ||
+      normalized.indexOf("permission denied") >= 0 ||
+      normalized.indexOf("row-level security") >= 0 ||
+      normalized.indexOf("unauthorized") >= 0
+    ) {
+      return "O Supabase recusou a alteração. Execute o SQL de criação do catálogo para liberar a chave pública.";
+    }
+    if (status === 404 || code === "42P01" || code === "PGRST205" || normalized.indexOf("could not find the table") >= 0) {
+      return "As tabelas do catálogo não foram encontradas. Execute o SQL de criação do banco.";
+    }
+    if (status === 413 || normalized.indexOf("maximum allowed size") >= 0 || normalized.indexOf("payload too large") >= 0) {
+      return "A foto ultrapassou o limite de 1,5 MB após o processamento. Escolha uma imagem menor.";
+    }
+    if (normalized.indexOf("bucket") >= 0 && normalized.indexOf("not found") >= 0) {
+      return "O armazenamento de fotos não foi criado. Execute o SQL de criação do banco.";
+    }
+    if (normalized.indexOf("failed to fetch") >= 0 || normalized.indexOf("network") >= 0) {
+      return "Não foi possível acessar o Supabase. Confira a internet e tente novamente.";
+    }
+    return cleanText(message, 240) || fallback || "A operação não pôde ser concluída.";
+  }
+
+  function emptyCatalog() {
+    return {
+      schemaVersion: 2,
+      revision: 1,
+      imageSeedVersion: 0,
+      updatedAt: new Date().toISOString(),
+      categories: [],
+      products: []
+    };
   }
 
   function bySelector(selector, scope) {
@@ -383,8 +434,8 @@
     if (!input || typeof input !== "object" || [1, 2].indexOf(input.schemaVersion) < 0) {
       throw new Error("Versão do catálogo não reconhecida.");
     }
-    if (!Array.isArray(input.categories) || input.categories.length < 1 || input.categories.length > 100) {
-      throw new Error("O catálogo precisa ter entre 1 e 100 categorias.");
+    if (!Array.isArray(input.categories) || input.categories.length > 100) {
+      throw new Error("A lista de categorias é inválida.");
     }
     if (!Array.isArray(input.products) || input.products.length > 1000) {
       throw new Error("A lista de tecidos é inválida.");
@@ -493,15 +544,7 @@
   }
 
   function loadCatalog() {
-    try {
-      var stored = localStorage.getItem(STORAGE_KEYS.catalog);
-      if (stored) {
-        return hydrateDefaultImages(normalizeCatalog(JSON.parse(stored)));
-      }
-    } catch (error) {
-      console.warn("Não foi possível carregar o catálogo salvo.", error);
-    }
-    return normalizeCatalog(clone(DEFAULT_CATALOG));
+    return emptyCatalog();
   }
 
   function hydrateDefaultImages(catalog) {
@@ -604,23 +647,6 @@
     return { schemaVersion: 1, items: merged };
   }
 
-  function saveCatalog(options) {
-    options = options || {};
-    try {
-      var current = localStorage.getItem(STORAGE_KEYS.catalog);
-      if (current && !options.skipBackup) {
-        localStorage.setItem(STORAGE_KEYS.catalogBackup, current);
-      }
-      state.catalog.revision += 1;
-      state.catalog.updatedAt = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEYS.catalog, JSON.stringify(state.catalog));
-      return true;
-    } catch (error) {
-      showToast("Não foi possível salvar", "O armazenamento deste navegador pode estar indisponível.", "error");
-      return false;
-    }
-  }
-
   function saveCart() {
     try {
       localStorage.setItem(STORAGE_KEYS.cart, JSON.stringify(state.cart));
@@ -632,35 +658,25 @@
   }
 
   function commitState(previousCatalog, previousCart) {
-    var catalogSaved = saveCatalog();
-    var cartSaved = true;
-    if (catalogSaved && previousCart) {
-      cartSaved = saveCart();
-    }
-    if (catalogSaved && cartSaved) {
-      return true;
-    }
-
     state.catalog = previousCatalog;
     if (previousCart) {
       state.cart = previousCart;
     }
-    try {
-      localStorage.setItem(STORAGE_KEYS.catalog, JSON.stringify(previousCatalog));
-      if (previousCart) {
-        localStorage.setItem(STORAGE_KEYS.cart, JSON.stringify(previousCart));
-      }
-    } catch (error) {
-      // The original save error already explains that persistence is unavailable.
-    }
+    showToast("Ação indisponível", "O catálogo só pode ser alterado diretamente pelo Supabase.", "error");
     return false;
   }
 
   function commitCatalogMutation(previousCatalog, previousCart) {
     if (!usingBackend()) {
-      return commitState(previousCatalog, previousCart);
+      state.catalog = previousCatalog;
+      if (previousCart) {
+        state.cart = previousCart;
+      }
+      showToast("Banco indisponível", "Conecte o Supabase para alterar o catálogo.", "error");
+      return false;
     }
-    saveCatalog({ skipBackup: true });
+    state.catalog.revision += 1;
+    state.catalog.updatedAt = new Date().toISOString();
     if (previousCart) {
       saveCart();
     }
@@ -939,28 +955,20 @@
   }
 
   async function storeCatalogPhoto(kind, entityId, processed) {
-    if (usingBackend()) {
-      var uploaded = await backend().uploadImage(kind, entityId, processed);
-      return {
-        image: uploaded.publicUrl,
-        imageId: "",
-        imagePath: uploaded.path
-      };
+    if (!usingBackend()) {
+      throw new Error("O Supabase precisa estar conectado para enviar fotos.");
     }
+    var uploaded = await backend().uploadImage(kind, entityId, processed);
     return {
-      image: "",
-      imageId: await storeProcessedMedia(processed),
-      imagePath: ""
+      image: uploaded.publicUrl,
+      imageId: "",
+      imagePath: uploaded.path
     };
   }
 
   async function deleteCatalogPhoto(imageId, imagePath) {
     if (usingBackend() && imagePath) {
       await backend().deleteImage(imagePath);
-      return;
-    }
-    if (imageId) {
-      await deleteMediaIfUnused(imageId);
     }
   }
 
@@ -1078,6 +1086,7 @@
       };
       renderStoredPhoto(preview, "", previewUrl, "Prévia da foto", "Nenhuma foto selecionada");
       removeButton.hidden = false;
+      showToast("Foto preparada", "A foto será enviada ao Supabase quando você salvar.", "success");
     }).catch(function (error) {
       if (!state[draftName] || state[draftName].requestId !== requestId) {
         return;
@@ -1119,6 +1128,7 @@
       input.value = "";
       renderStoredPhoto(preview, "", "", "", "Nenhuma foto selecionada");
       removeButton.hidden = true;
+      showToast("Foto removida do formulário", "Salve para confirmar a remoção no catálogo.", "success");
     };
     if (draft.existingId || draft.existingLegacy) {
       askConfirm("Remover esta foto?", "A foto será excluída quando você salvar " + label + ".", remove);
@@ -1398,6 +1408,7 @@
     dom.productDialogCategory.textContent = category ? category.name : "Tecido";
     dom.productDialogName.textContent = product.name;
     dom.productDialogDescription.textContent = product.description;
+    dom.productDialogDescription.hidden = !product.description;
     dom.unitLabel.textContent = product.unit === "metro" ? "Em metros" : "Em " + pluralUnit(product.unit, 2);
     dom.productQuantity.min = String(product.minQuantity);
     dom.productQuantity.step = String(product.quantityStep);
@@ -1803,18 +1814,18 @@
     dom.editorAccessDescription.textContent = "Digite a senha para habilitar as ferramentas de edição neste dispositivo.";
     if (remote) {
       dom.editorModeLabel.textContent = "Editor conectado";
-      dom.editorModeDescription.textContent = "Gerencie o catálogo compartilhado por todos os dispositivos.";
+      dom.editorModeDescription.textContent = "Cadastre categorias e produtos diretamente no banco.";
       dom.editorNoticeTitle.textContent = "Catálogo conectado ao Supabase.";
       dom.editorNoticeText.textContent = "Categorias, produtos e fotos são publicados para todos os visitantes após cada alteração.";
       dom.editorBarTitle.textContent = "Editor conectado ativo";
       dom.editorBarDetail.textContent = "As mudanças são sincronizadas com o Supabase.";
     } else {
-      dom.editorModeLabel.textContent = "Editor local";
-      dom.editorModeDescription.textContent = "Personalize o catálogo salvo neste navegador.";
-      dom.editorNoticeTitle.textContent = "Este é um editor local.";
-      dom.editorNoticeText.textContent = "Alterações aparecem somente neste dispositivo. Configure o Supabase para sincronizar o catálogo e as fotos.";
-      dom.editorBarTitle.textContent = "Modo editor local ativo";
-      dom.editorBarDetail.textContent = "As mudanças ficam salvas neste navegador.";
+      dom.editorModeLabel.textContent = "Banco indisponível";
+      dom.editorModeDescription.textContent = "O editor abre normalmente, mas precisa do Supabase para salvar.";
+      dom.editorNoticeTitle.textContent = "Supabase não conectado.";
+      dom.editorNoticeText.textContent = "O catálogo não usa armazenamento local. Reconecte o banco para publicar alterações.";
+      dom.editorBarTitle.textContent = "Modo editor ativo";
+      dom.editorBarDetail.textContent = "Conecte o Supabase para salvar alterações.";
     }
   }
 
@@ -1927,18 +1938,6 @@
 
     try {
       var allowed = await verifyEditorPassword(password);
-      if (allowed && usingBackend()) {
-        backend().setEditorEnabled(true);
-        var remoteCatalog = await backend().loadCatalog();
-        if (remoteCatalog) {
-          state.catalog = normalizeCatalog(remoteCatalog);
-          saveCatalog({ skipBackup: true });
-          reconcileCart();
-          saveCart();
-        } else {
-          await backend().syncCatalog(state.catalog);
-        }
-      }
       if (!allowed) {
         dom.editorPassword.setAttribute("aria-invalid", "true");
         dom.editorAccessError.hidden = false;
@@ -1955,13 +1954,10 @@
       renderEditor();
       showToast(
         "Editor habilitado",
-        usingBackend() ? "Catálogo conectado e pronto para edição." : "As ferramentas foram liberadas neste dispositivo.",
+        usingBackend() ? "Catálogo conectado e pronto para edição." : "Editor aberto. O banco está indisponível para salvar alterações.",
         "success"
       );
     } catch (error) {
-      if (usingBackend()) {
-        backend().setEditorEnabled(false);
-      }
       dom.editorPassword.setAttribute("aria-invalid", "true");
       dom.editorAccessError.textContent = error.message || "Não foi possível validar o acesso.";
       dom.editorAccessError.hidden = false;
@@ -1969,10 +1965,6 @@
       dom.editorAccessSubmit.disabled = false;
       dom.editorAccessSubmit.querySelector("span").textContent = "Entrar no editor";
     }
-  }
-
-  function isAtPageEnd() {
-    return Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 48;
   }
 
   function cancelEditorHold() {
@@ -1986,9 +1978,6 @@
   function completeEditorHold() {
     editorHoldTimer = null;
     editorHoldPointerId = null;
-    if (!isAtPageEnd()) {
-      return;
-    }
     if (state.editorMode) {
       openEditor();
     } else {
@@ -1998,9 +1987,6 @@
 
   function startEditorHold(pointerId) {
     cancelEditorHold();
-    if (!isAtPageEnd()) {
-      return;
-    }
     editorHoldPointerId = pointerId;
     editorHoldTimer = window.setTimeout(completeEditorHold, EDITOR_HOLD_DURATION);
   }
@@ -2018,6 +2004,9 @@
 
   function renderEditorCategoryList() {
     dom.editorCategoryList.replaceChildren();
+    if (!state.catalog.categories.length) {
+      dom.editorCategoryList.appendChild(makeElement("p", "editor-list-empty", "Nenhuma categoria cadastrada."));
+    }
     sortedCategories().forEach(function (category) {
       var productCount = state.catalog.products.filter(function (product) {
         return product.categoryId === category.id;
@@ -2069,14 +2058,13 @@
       dom.editorProductList.appendChild(makeElement("p", "editor-list-empty", "Esta categoria ainda não tem produtos."));
     }
     products.forEach(function (product) {
-      var category = findCategory(product.categoryId);
       var row = makeElement("article", "editor-list-item");
       var preview = makeElement("span", "editor-item-preview");
       renderStoredPhoto(preview, product.imageId, product.image, "", "Sem foto");
       var info = makeElement("div", "editor-item-info");
       info.append(
         makeElement("strong", "", product.name),
-        makeElement("small", "", (category ? category.name + " • " : "") + "Venda por " + product.unit)
+        makeElement("small", "", "Produto")
       );
       var actions = makeElement("div", "editor-item-actions");
       var edit = makeElement("button");
@@ -2106,7 +2094,10 @@
       return;
     }
     dom.editorProductPanelTitle.textContent = category.name;
-    dom.editorProductPanelDescription.textContent = category.description || "Sem descrição cadastrada.";
+    var productCount = state.catalog.products.filter(function (product) {
+      return product.categoryId === category.id;
+    }).length;
+    dom.editorProductPanelDescription.textContent = productCount + (productCount === 1 ? " produto cadastrado" : " produtos cadastrados");
     renderStoredPhoto(dom.editorCategorySummaryPhoto, category.imageId, category.image || "", "", "Sem foto");
   }
 
@@ -2145,12 +2136,10 @@
     allBySelector("[data-editor-product-count]").forEach(function (node) {
       node.textContent = String(state.catalog.products.length);
     });
-    bySelector("[data-stat-categories]").textContent = String(state.catalog.categories.length);
-    bySelector("[data-stat-products]").textContent = String(state.catalog.products.length);
   }
 
   function switchEditorTab(tabName) {
-    if (["categories", "products", "data"].indexOf(tabName) < 0) {
+    if (["categories", "products"].indexOf(tabName) < 0) {
       tabName = "categories";
     }
     var selectedTab = tabName === "products" ? "categories" : tabName;
@@ -2191,7 +2180,6 @@
     if (category) {
       dom.categoryForm.elements.id.value = category.id;
       dom.categoryForm.elements.name.value = category.name;
-      dom.categoryForm.elements.description.value = category.description;
       state.categoryPhotoDraft.existingId = category.imageId || "";
       renderStoredPhoto(dom.categoryPhotoPreview, category.imageId, category.image || "", "Prévia de " + category.name, "Nenhuma foto cadastrada");
       dom.categoryPhotoRemove.hidden = !category.imageId && !category.image;
@@ -2211,6 +2199,10 @@
 
   async function submitCategoryForm(event) {
     event.preventDefault();
+    if (!usingBackend()) {
+      showToast("Banco indisponível", "Conecte o Supabase para salvar a categoria.", "error");
+      return;
+    }
     if (dom.categoryPhotoPreview.classList.contains("is-processing")) {
       showToast("Aguarde a foto", "A imagem ainda está sendo preparada.", "error");
       return;
@@ -2221,6 +2213,7 @@
       error.textContent = "Informe o nome da categoria.";
       dom.categoryForm.elements.name.setAttribute("aria-invalid", "true");
       dom.categoryForm.elements.name.focus();
+      showToast("Nome obrigatório", "Digite o título da categoria antes de salvar.", "error");
       return;
     }
     error.textContent = "";
@@ -2240,6 +2233,7 @@
     var newImagePath = oldImagePath;
     var newImage = existing ? existing.image || "" : "";
     var storedPhoto = null;
+    var photoChange = state.categoryPhotoDraft.mode;
     setSubmitBusy(dom.categoryForm, true);
     try {
       if (state.categoryPhotoDraft.mode === "replace" && state.categoryPhotoDraft.processed) {
@@ -2253,14 +2247,12 @@
         newImage = "";
       }
       category.name = name;
-      category.description = cleanText(dom.categoryForm.elements.description.value, 180);
+      category.description = "";
       category.imageId = newImageId;
       category.imagePath = newImagePath;
       category.image = newImage;
       category.imageAlt = name;
-      if (usingBackend()) {
-        await backend().saveCategory(category);
-      }
+      await backend().saveCategory(category);
       if (!existing) {
         state.catalog.categories.push(category);
       }
@@ -2269,9 +2261,23 @@
         renderAll();
         renderEditor();
         if (oldImageId !== newImageId || oldImagePath !== newImagePath) {
-          await deleteCatalogPhoto(oldImageId, oldImagePath);
+          try {
+            await deleteCatalogPhoto(oldImageId, oldImagePath);
+          } catch (cleanupError) {
+            showToast(
+              "Categoria salva, foto antiga pendente",
+              friendlyDatabaseError(cleanupError, "A categoria foi salva, mas a foto anterior não pôde ser removida."),
+              "warning"
+            );
+          }
         }
-        showToast(existing ? "Categoria atualizada" : "Categoria criada", category.name + " já aparece na vitrine.", "success");
+        var categoryMessage = category.name + " já aparece na vitrine.";
+        if (photoChange === "replace") {
+          categoryMessage = "Título e foto de “" + category.name + "” foram salvos.";
+        } else if (photoChange === "remove") {
+          categoryMessage = "“" + category.name + "” foi salva sem foto.";
+        }
+        showToast(existing ? "Categoria atualizada" : "Categoria criada", categoryMessage, "success");
       } else if (storedPhoto) {
         if (storedPhoto.imagePath && usingBackend()) {
           await backend().deleteImage(storedPhoto.imagePath);
@@ -2290,7 +2296,11 @@
           await mediaDelete(storedPhoto.imageId);
         }
       }
-      showToast("Não foi possível salvar", saveError.message || "Tente outra foto.", "error");
+      showToast(
+        existing ? "Erro ao atualizar categoria" : "Erro ao criar categoria",
+        friendlyDatabaseError(saveError, "Revise o título e a foto e tente novamente."),
+        "error"
+      );
       renderAll();
       renderEditor();
     } finally {
@@ -2303,8 +2313,8 @@
     if (!category) {
       return;
     }
-    if (state.catalog.categories.length === 1) {
-      showToast("Ação não permitida", "O catálogo precisa ter ao menos uma categoria.", "error");
+    if (!usingBackend()) {
+      showToast("Banco indisponível", "Conecte o Supabase para excluir a categoria.", "error");
       return;
     }
     var products = state.catalog.products.filter(function (product) {
@@ -2324,13 +2334,11 @@
         return product.imagePath || "";
       })).filter(Boolean);
       var productIds = new Set(products.map(function (product) { return product.id; }));
-      if (usingBackend()) {
-        try {
-          await backend().deleteCategory(category.id);
-        } catch (error) {
-          showToast("Não foi possível excluir", error.message || "Verifique sua conexão e tente novamente.", "error");
-          return;
-        }
+      try {
+        await backend().deleteCategory(category.id);
+      } catch (error) {
+        showToast("Erro ao excluir categoria", friendlyDatabaseError(error, "Verifique sua conexão e tente novamente."), "error");
+        return;
       }
       state.catalog.categories = state.catalog.categories.filter(function (item) {
         return item.id !== category.id;
@@ -2357,9 +2365,12 @@
         switchEditorTab("categories");
         await Promise.all(mediaIds.map(deleteMediaIfUnused));
         if (usingBackend()) {
-          await Promise.all(mediaPaths.map(function (path) {
-            return backend().deleteImage(path).catch(function () {});
+          var cleanupResults = await Promise.allSettled(mediaPaths.map(function (path) {
+            return backend().deleteImage(path);
           }));
+          if (cleanupResults.some(function (result) { return result.status === "rejected"; })) {
+            showToast("Categoria excluída", "O cadastro foi removido, mas uma foto antiga ficou pendente no armazenamento.", "warning");
+          }
         }
         showToast("Categoria excluída", category.name + " foi removida da vitrine.", "success");
       }
@@ -2520,7 +2531,8 @@
     var product = productId ? findProduct(productId) : null;
     var targetCategoryId = product ? product.categoryId : preferredCategoryId || state.editorCategoryId;
     if (!findCategory(targetCategoryId)) {
-      targetCategoryId = sortedCategories()[0].id;
+      showToast("Crie uma categoria", "Cadastre uma categoria antes de adicionar produtos.", "error");
+      return;
     }
     state.editorCategoryId = targetCategoryId;
     switchEditorTab("products");
@@ -2532,8 +2544,6 @@
       dom.productForm.elements.id.value = product.id;
       dom.productForm.elements.name.value = product.name;
       dom.productForm.elements.categoryId.value = product.categoryId;
-      dom.productForm.elements.description.value = product.description;
-      dom.productForm.elements.unit.value = product.unit;
       state.productPhotoDraft.existingId = product.imageId || "";
       state.productPhotoDraft.existingLegacy = product.image || "";
       renderStoredPhoto(dom.productPhotoPreview, product.imageId, product.image, "Prévia de " + product.name, "Nenhuma foto cadastrada");
@@ -2583,6 +2593,10 @@
 
   async function submitProductForm(event) {
     event.preventDefault();
+    if (!usingBackend()) {
+      showToast("Banco indisponível", "Conecte o Supabase para salvar o produto.", "error");
+      return;
+    }
     if (dom.productPhotoPreview.classList.contains("is-processing")) {
       showToast("Aguarde a foto", "A imagem ainda está sendo preparada.", "error");
       return;
@@ -2593,6 +2607,7 @@
       nameError.textContent = "Informe o nome do tecido.";
       dom.productForm.elements.name.setAttribute("aria-invalid", "true");
       dom.productForm.elements.name.focus();
+      showToast("Nome obrigatório", "Digite o título do produto antes de salvar.", "error");
       return;
     }
     nameError.textContent = "";
@@ -2633,6 +2648,7 @@
     var newImagePath = oldImagePath;
     var newImage = existing ? existing.image || "" : "";
     var storedPhoto = null;
+    var photoChange = state.productPhotoDraft.mode;
     setSubmitBusy(dom.productForm, true);
     try {
       if (state.productPhotoDraft.mode === "replace" && state.productPhotoDraft.processed) {
@@ -2647,18 +2663,16 @@
       }
       product.name = name;
       product.categoryId = category.id;
-      product.description = cleanText(dom.productForm.elements.description.value, 300);
-      product.unit = dom.productForm.elements.unit.value;
-      product.minQuantity = product.unit === "metro" ? 0.5 : 1;
-      product.quantityStep = product.unit === "metro" ? 0.5 : 1;
+      product.description = "";
+      product.unit = "metro";
+      product.minQuantity = 0.5;
+      product.quantityStep = 0.5;
       product.imageId = newImageId;
       product.imagePath = newImagePath;
       product.image = newImage;
       product.imageAlt = name;
       product.variants = [defaultVariant];
-      if (usingBackend()) {
-        await backend().saveProduct(product);
-      }
+      await backend().saveProduct(product);
       if (!existing) {
         state.catalog.products.push(product);
       }
@@ -2684,9 +2698,23 @@
         switchEditorTab("products");
         await Promise.all([oldImageId].concat(oldVariantImageIds).map(deleteMediaIfUnused));
         if (oldImagePath !== newImagePath) {
-          await deleteCatalogPhoto("", oldImagePath);
+          try {
+            await deleteCatalogPhoto("", oldImagePath);
+          } catch (cleanupError) {
+            showToast(
+              "Produto salvo, foto antiga pendente",
+              friendlyDatabaseError(cleanupError, "O produto foi salvo, mas a foto anterior não pôde ser removida."),
+              "warning"
+            );
+          }
         }
-        showToast(existing ? "Tecido atualizado" : "Tecido adicionado", product.name + " já aparece na vitrine.", "success");
+        var productMessage = product.name + " já aparece na vitrine.";
+        if (photoChange === "replace") {
+          productMessage = "Título e foto de “" + product.name + "” foram salvos.";
+        } else if (photoChange === "remove") {
+          productMessage = "“" + product.name + "” foi salvo sem foto.";
+        }
+        showToast(existing ? "Produto atualizado" : "Produto criado", productMessage, "success");
       } else if (storedPhoto) {
         if (storedPhoto.imagePath && usingBackend()) {
           await backend().deleteImage(storedPhoto.imagePath);
@@ -2706,7 +2734,11 @@
           await mediaDelete(storedPhoto.imageId);
         }
       }
-      showToast("Não foi possível salvar", saveError.message || "Tente outra foto.", "error");
+      showToast(
+        existing ? "Erro ao atualizar produto" : "Erro ao criar produto",
+        friendlyDatabaseError(saveError, "Revise o título e a foto e tente novamente."),
+        "error"
+      );
       renderAll();
       renderEditor();
     } finally {
@@ -2719,19 +2751,21 @@
     if (!product) {
       return;
     }
+    if (!usingBackend()) {
+      showToast("Banco indisponível", "Conecte o Supabase para excluir o produto.", "error");
+      return;
+    }
     askConfirm(
       "Excluir tecido?",
       "“" + product.name + "” será removido. Se estiver na seleção, também será retirado.",
       async function () {
         var previousCatalog = clone(state.catalog);
         var previousCart = clone(state.cart);
-        if (usingBackend()) {
-          try {
-            await backend().deleteProduct(product.id);
-          } catch (error) {
-            showToast("Não foi possível excluir", error.message || "Verifique sua conexão e tente novamente.", "error");
-            return;
-          }
+        try {
+          await backend().deleteProduct(product.id);
+        } catch (error) {
+          showToast("Erro ao excluir produto", friendlyDatabaseError(error, "Verifique sua conexão e tente novamente."), "error");
+          return;
         }
         state.catalog.products = state.catalog.products.filter(function (item) {
           return item.id !== product.id;
@@ -2745,9 +2779,13 @@
         if (saved) {
           await Promise.all([product.imageId].concat(product.variants.map(function (variant) { return variant.imageId || ""; })).filter(Boolean).map(deleteMediaIfUnused));
           if (usingBackend() && product.imagePath) {
-            await backend().deleteImage(product.imagePath).catch(function () {});
+            try {
+              await backend().deleteImage(product.imagePath);
+            } catch (cleanupError) {
+              showToast("Produto excluído", "O cadastro foi removido, mas a foto antiga ficou pendente no armazenamento.", "warning");
+            }
           }
-          showToast("Tecido excluído", product.name + " foi removido da vitrine.", "success");
+          showToast("Produto excluído", product.name + " foi removido da vitrine.", "success");
         }
       }
     );
@@ -3035,10 +3073,13 @@
       return;
     }
     var toast = makeElement("div", "toast");
+    toast.dataset.toastType = type || "success";
     toast.setAttribute("role", type === "error" ? "alert" : "status");
     var icon = makeElement("span", "toast-icon");
     if (type === "error") {
       icon.appendChild(makeIcon("fa-solid fa-circle-exclamation"));
+    } else if (type === "warning") {
+      icon.appendChild(makeIcon("fa-solid fa-triangle-exclamation"));
     } else {
       icon.appendChild(makeIcon("fa-solid fa-check"));
     }
@@ -3046,12 +3087,13 @@
     copy.append(makeElement("strong", "", title), makeElement("p", "", message));
     toast.append(icon, copy);
     dom.toastRegion.appendChild(toast);
+    announce(title + ". " + message);
     window.setTimeout(function () {
       toast.classList.add("is-leaving");
       window.setTimeout(function () {
         toast.remove();
       }, 320);
-    }, 3900);
+    }, type === "error" ? 7200 : 4400);
   }
 
   function toggleMenu(force) {
@@ -3560,22 +3602,27 @@
 
   async function init() {
     cacheDom();
-    state.catalog = loadCatalog();
+    state.catalog = emptyCatalog();
+    try {
+      localStorage.removeItem(STORAGE_KEYS.catalog);
+      localStorage.removeItem(STORAGE_KEYS.catalogBackup);
+    } catch (error) {
+      // O catálogo conectado não depende do armazenamento local.
+    }
     if (backend() && backend().isConfigured()) {
       try {
         var backendState = await backend().init();
         state.backendConfigured = backendState.configured;
         var remoteCatalog = await backend().loadCatalog();
-        if (remoteCatalog) {
-          state.catalog = normalizeCatalog(remoteCatalog);
-          saveCatalog({ skipBackup: true });
-        }
+        state.catalog = remoteCatalog ? normalizeCatalog(remoteCatalog) : emptyCatalog();
       } catch (error) {
         state.backendConfigured = false;
-        console.warn("Supabase indisponível; usando catálogo local.", error);
+        state.catalog = emptyCatalog();
+        console.warn("Supabase indisponível; o catálogo permanecerá vazio.", error);
       }
     }
     state.cart = prepareDirectOrderCart(loadCart());
+    reconcileCart();
     saveCart();
     try {
       state.editorMode = localStorage.getItem(STORAGE_KEYS.editor) === "1";

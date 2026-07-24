@@ -122,6 +122,28 @@
   font-size: 0.86rem;
 }
 
+.toast[data-toast-type="success"] {
+  border-color: rgba(98, 214, 158, 0.3);
+}
+
+.toast[data-toast-type="success"] .toast-icon {
+  background: rgba(98, 214, 158, 0.1);
+  color: #75dcae;
+}
+
+.toast[data-toast-type="error"] {
+  border-color: rgba(255, 115, 104, 0.34);
+}
+
+.toast[data-toast-type="error"] .toast-icon {
+  background: rgba(255, 115, 104, 0.1);
+  color: #ff8278;
+}
+
+.toast[data-toast-type="warning"] {
+  border-color: rgba(223, 186, 82, 0.34);
+}
+
 .catalog-stats {
   grid-template-columns: repeat(2, 1fr);
 }

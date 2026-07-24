@@ -69,76 +69,34 @@ for each row execute function public.set_updated_at();
 alter table public.categories enable row level security;
 alter table public.products enable row level security;
 
-grant select on public.categories, public.products to anon, authenticated;
-grant insert, update, delete on public.categories, public.products to anon, authenticated;
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.categories, public.products to anon, authenticated;
 
 drop policy if exists "catalogo publico mostra categorias ativas" on public.categories;
-create policy "catalogo publico mostra categorias ativas"
-on public.categories
-for select
-to anon, authenticated
-using (active = true);
-
 drop policy if exists "admins gerenciam categorias" on public.categories;
 drop policy if exists "editor publico cria categorias" on public.categories;
-create policy "editor publico cria categorias"
-on public.categories
-for insert
-to anon, authenticated
-with check (true);
-
 drop policy if exists "editor publico atualiza categorias" on public.categories;
-create policy "editor publico atualiza categorias"
+drop policy if exists "editor publico exclui categorias" on public.categories;
+drop policy if exists "catalogo publico gerencia categorias" on public.categories;
+create policy "catalogo publico gerencia categorias"
 on public.categories
-for update
+for all
 to anon, authenticated
 using (true)
 with check (true);
-
-drop policy if exists "editor publico exclui categorias" on public.categories;
-create policy "editor publico exclui categorias"
-on public.categories
-for delete
-to anon, authenticated
-using (true);
 
 drop policy if exists "catalogo publico mostra produtos ativos" on public.products;
-create policy "catalogo publico mostra produtos ativos"
-on public.products
-for select
-to anon, authenticated
-using (
-  active = true
-  and exists (
-    select 1
-    from public.categories
-    where categories.id = products.category_id
-      and categories.active = true
-  )
-);
-
 drop policy if exists "admins gerenciam produtos" on public.products;
 drop policy if exists "editor publico cria produtos" on public.products;
-create policy "editor publico cria produtos"
-on public.products
-for insert
-to anon, authenticated
-with check (true);
-
 drop policy if exists "editor publico atualiza produtos" on public.products;
-create policy "editor publico atualiza produtos"
+drop policy if exists "editor publico exclui produtos" on public.products;
+drop policy if exists "catalogo publico gerencia produtos" on public.products;
+create policy "catalogo publico gerencia produtos"
 on public.products
-for update
+for all
 to anon, authenticated
 using (true)
 with check (true);
-
-drop policy if exists "editor publico exclui produtos" on public.products;
-create policy "editor publico exclui produtos"
-on public.products
-for delete
-to anon, authenticated
-using (true);
 
 insert into storage.buckets (
   id,

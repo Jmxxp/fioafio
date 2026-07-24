@@ -5,6 +5,16 @@
 Abra o **SQL Editor** do projeto Supabase e execute todo o arquivo
 [`supabase/schema.sql`](supabase/schema.sql).
 
+Se quiser apagar a estrutura anterior e começar completamente do zero, execute
+primeiro [`supabase/reset.sql`](supabase/reset.sql) e depois execute
+[`supabase/schema.sql`](supabase/schema.sql). O reset apaga categorias e
+produtos, mas mantém o bucket `catalog-images`.
+
+O Supabase bloqueia a exclusão direta de arquivos do Storage por SQL. Para
+remover também as fotos, esvazie o bucket `catalog-images` pelo painel Storage
+ou pela Storage API antes de executar o reset. Se o bucket já estiver vazio,
+ignore essa etapa.
+
 O script cria:
 
 - `categories`: categorias da vitrine;
@@ -30,10 +40,9 @@ Use somente a chave pública/publishable no navegador. Nunca use a
 ## 3. Primeiro acesso
 
 Ao ativar o editor, digite somente a senha já configurada na interface. Não é
-necessário criar usuário, e-mail ou conta no Supabase. Se as tabelas estiverem
-vazias, o catálogo local atual será enviado automaticamente. Depois disso,
-categorias, produtos e fotos passam a ser compartilhados por todos os
-dispositivos.
+necessário criar usuário, e-mail ou conta no Supabase. O catálogo começa vazio:
+categorias, produtos e fotos só aparecem depois de serem cadastrados no editor e
+salvos no banco. Nenhum catálogo demonstrativo ou cópia local é enviado.
 
 ## Dados necessários para conectar
 
