@@ -8,7 +8,6 @@
     catalog: "fioafio.catalog.v1",
     catalogBackup: "fioafio.catalog.backup.v1",
     cart: "fioafio.cart.v1",
-    quoteDetails: "fioafio.quote-details.v1",
     editor: "fioafio.editor"
   };
 
@@ -18,6 +17,7 @@
     store: "images"
   };
   var MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+  var COMPRESS_IMAGE_ABOVE_BYTES = 1.5 * 1024 * 1024;
   var MAX_IMAGE_EDGE = 1600;
   var mediaDbPromise = null;
   var mediaUrlCache = new Map();
@@ -286,12 +286,12 @@
   var state = {
     catalog: null,
     cart: { schemaVersion: 1, items: [] },
-    quoteDetails: {},
     activeCategory: "all",
     search: "",
     currentProductId: null,
     selectedVariantId: null,
     editorMode: false,
+    backendConfigured: false,
     editorCategoryId: null,
     categoryPhotoDraft: { mode: "keep", existingId: "", existingLegacy: "", previewUrl: "", processed: null },
     productPhotoDraft: { mode: "keep", existingId: "", existingLegacy: "", previewUrl: "", processed: null },
@@ -309,6 +309,14 @@
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function backend() {
+    return window.FioAFioBackend || null;
+  }
+
+  function usingBackend() {
+    return Boolean(state.backendConfigured && backend());
   }
 
   function bySelector(selector, scope) {
@@ -402,6 +410,7 @@
         description: cleanText(category.description || "", 180),
         image: image,
         imageId: isValidId(category.imageId) ? category.imageId : "",
+        imagePath: typeof category.imagePath === "string" ? category.imagePath.slice(0, 500) : "",
         imageAlt: cleanText(category.imageAlt || name, 120),
         sortOrder: Number.isFinite(Number(category.sortOrder)) ? Number(category.sortOrder) : (index + 1) * 10
       };
@@ -461,6 +470,7 @@
         quantityStep: validQuantity(product.quantityStep) ? Number(product.quantityStep) : 0.5,
         image: image,
         imageId: isValidId(product.imageId) ? product.imageId : "",
+        imagePath: typeof product.imagePath === "string" ? product.imagePath.slice(0, 500) : "",
         imageAlt: cleanText(product.imageAlt || name, 120),
         sortOrder: Number.isFinite(Number(product.sortOrder)) ? Number(product.sortOrder) : (index + 1) * 10,
         variants: variants
@@ -565,34 +575,33 @@
     return { schemaVersion: 1, items: [] };
   }
 
-  function normalizeQuoteDetails(input) {
-    input = input && typeof input === "object" ? input : {};
-    return {
-      name: cleanText(input.name || "", 80),
-      city: cleanText(input.city || "", 80),
-      state: cleanText(input.state || "", 2).toUpperCase(),
-      fulfillment: cleanText(input.fulfillment || "Quero consultar as opções", 60),
-      postalCode: cleanText(input.postalCode || "", 9),
-      notes: cleanText(input.notes || "", 500)
-    };
-  }
-
-  function loadQuoteDetails() {
-    try {
-      var stored = localStorage.getItem(STORAGE_KEYS.quoteDetails);
-      return stored ? normalizeQuoteDetails(JSON.parse(stored)) : normalizeQuoteDetails({});
-    } catch (error) {
-      return normalizeQuoteDetails({});
-    }
-  }
-
-  function saveQuoteDetails(details) {
-    state.quoteDetails = normalizeQuoteDetails(details);
-    try {
-      localStorage.setItem(STORAGE_KEYS.quoteDetails, JSON.stringify(state.quoteDetails));
-    } catch (error) {
-      // The quote can still be sent when local persistence is unavailable.
-    }
+  function prepareDirectOrderCart(cart) {
+    var merged = [];
+    cart.items.forEach(function (item) {
+      var product = findProduct(item.productId);
+      var variant = firstAvailableVariant(product);
+      if (product && variant) {
+        var category = findCategory(product.categoryId);
+        item.variantId = variant.id;
+        item.quantity = clampProductQuantity(product, item.quantity);
+        item.snapshot.productName = product.name;
+        item.snapshot.categoryName = category ? category.name : "Tecido";
+        item.snapshot.colorName = "Padrão";
+        item.snapshot.colorHex = "#777777";
+        item.snapshot.unit = product.unit;
+        item.snapshot.image = product.image || "";
+        item.snapshot.imageId = product.imageId || "";
+      }
+      var existing = merged.find(function (line) {
+        return line.productId === item.productId;
+      });
+      if (existing && product) {
+        existing.quantity = clampProductQuantity(product, existing.quantity + item.quantity);
+      } else {
+        merged.push(item);
+      }
+    });
+    return { schemaVersion: 1, items: merged };
   }
 
   function saveCatalog(options) {
@@ -645,6 +654,17 @@
       // The original save error already explains that persistence is unavailable.
     }
     return false;
+  }
+
+  function commitCatalogMutation(previousCatalog, previousCart) {
+    if (!usingBackend()) {
+      return commitState(previousCatalog, previousCart);
+    }
+    saveCatalog({ skipBackup: true });
+    if (previousCart) {
+      saveCart();
+    }
+    return true;
   }
 
   function makeId(prefix) {
@@ -837,6 +857,38 @@
     });
   }
 
+  function encodeCanvasWithinLimit(canvas, targetBytes) {
+    function encode(currentCanvas, quality) {
+      return canvasToBlob(currentCanvas, "image/webp", quality).catch(function () {
+        return canvasToBlob(currentCanvas, "image/jpeg", quality);
+      }).then(function (blob) {
+        if (!targetBytes || blob.size <= targetBytes) {
+          return {
+            blob: blob,
+            width: currentCanvas.width,
+            height: currentCanvas.height
+          };
+        }
+        if (quality > 0.5) {
+          return encode(currentCanvas, Math.max(0.5, quality - 0.08));
+        }
+        if (currentCanvas.width <= 480 && currentCanvas.height <= 480) {
+          throw new Error("Não foi possível comprimir esta foto para menos de 1,5 MB.");
+        }
+        var resized = document.createElement("canvas");
+        resized.width = Math.max(1, Math.round(currentCanvas.width * 0.82));
+        resized.height = Math.max(1, Math.round(currentCanvas.height * 0.82));
+        var resizedContext = resized.getContext("2d", { alpha: true });
+        if (!resizedContext) {
+          throw new Error("O navegador não conseguiu comprimir a foto.");
+        }
+        resizedContext.drawImage(currentCanvas, 0, 0, resized.width, resized.height);
+        return encode(resized, 0.78);
+      });
+    }
+    return encode(canvas, 0.84);
+  }
+
   function processImageFile(file) {
     var allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!(file instanceof Blob) || allowedTypes.indexOf(file.type) < 0) {
@@ -860,14 +912,13 @@
         throw new Error("O navegador não conseguiu preparar a foto.");
       }
       decoded.draw(context, width, height);
-      return canvasToBlob(canvas, "image/webp", 0.84).catch(function () {
-        return canvasToBlob(canvas, "image/jpeg", 0.88);
-      }).then(function (blob) {
+      var targetBytes = file.size > COMPRESS_IMAGE_ABOVE_BYTES ? COMPRESS_IMAGE_ABOVE_BYTES : 0;
+      return encodeCanvasWithinLimit(canvas, targetBytes).then(function (processed) {
         return {
-          blob: blob,
-          width: width,
-          height: height,
-          mime: blob.type || "image/webp",
+          blob: processed.blob,
+          width: processed.width,
+          height: processed.height,
+          mime: processed.blob.type || "image/webp",
           originalName: cleanText(file.name || "foto", 160)
         };
       });
@@ -885,6 +936,32 @@
       originalName: processed.originalName,
       createdAt: new Date().toISOString()
     }).then(function () { return id; });
+  }
+
+  async function storeCatalogPhoto(kind, entityId, processed) {
+    if (usingBackend()) {
+      var uploaded = await backend().uploadImage(kind, entityId, processed);
+      return {
+        image: uploaded.publicUrl,
+        imageId: "",
+        imagePath: uploaded.path
+      };
+    }
+    return {
+      image: "",
+      imageId: await storeProcessedMedia(processed),
+      imagePath: ""
+    };
+  }
+
+  async function deleteCatalogPhoto(imageId, imagePath) {
+    if (usingBackend() && imagePath) {
+      await backend().deleteImage(imagePath);
+      return;
+    }
+    if (imageId) {
+      await deleteMediaIfUnused(imageId);
+    }
   }
 
   function makeMediaPlaceholder(label) {
@@ -1064,8 +1141,6 @@
     dom.productDialogCategory = bySelector("[data-product-dialog-category]");
     dom.productDialogName = bySelector("[data-product-dialog-name]");
     dom.productDialogDescription = bySelector("[data-product-dialog-description]");
-    dom.selectedColor = bySelector("[data-selected-color]");
-    dom.colorOptions = bySelector("[data-color-options]");
     dom.productQuantity = bySelector("[data-product-quantity]");
     dom.unitLabel = bySelector("[data-unit-label]");
     dom.addCartButton = bySelector("[data-action='add-to-cart']");
@@ -1076,22 +1151,22 @@
     dom.cartLinesLabel = bySelector("[data-cart-lines-label]");
     dom.cartLineCount = bySelector("[data-cart-line-count]");
     dom.cartTotalQuantity = bySelector("[data-cart-total-quantity]");
-    dom.quoteDialog = bySelector("[data-quote-dialog]");
-    dom.quoteForm = bySelector("[data-quote-form]");
-    dom.quoteName = bySelector("[data-quote-name]");
-    dom.quoteCity = bySelector("[data-quote-city]");
-    dom.quoteState = bySelector("[data-quote-state]");
-    dom.quoteFulfillment = bySelector("[data-quote-fulfillment]");
-    dom.quotePostalCode = bySelector("[data-quote-postal-code]");
-    dom.quoteNotes = bySelector("[data-quote-notes]");
+    dom.cartCheckout = bySelector("[data-action='checkout']");
     dom.editorDialog = bySelector("[data-editor-dialog]");
     dom.editorBar = bySelector("[data-editor-bar]");
+    dom.editorBarTitle = bySelector("[data-editor-bar-title]");
+    dom.editorBarDetail = bySelector("[data-editor-bar-detail]");
     dom.editorAccessDialog = bySelector("[data-editor-access-dialog]");
     dom.editorAccessForm = bySelector("[data-editor-access-form]");
     dom.editorPassword = bySelector("[data-editor-password]");
+    dom.editorAccessDescription = bySelector("[data-editor-access-description]");
     dom.editorAccessError = bySelector("[data-editor-access-error]");
     dom.editorAccessSubmit = bySelector("[data-editor-access-submit]");
     dom.editorSecretTrigger = bySelector("[data-editor-secret-trigger]");
+    dom.editorModeLabel = bySelector("[data-editor-mode-label]");
+    dom.editorModeDescription = bySelector("[data-editor-mode-description]");
+    dom.editorNoticeTitle = bySelector("[data-editor-notice-title]");
+    dom.editorNoticeText = bySelector("[data-editor-notice-text]");
     dom.editorCategoriesPanel = bySelector("[data-editor-panel='categories']");
     dom.editorProductsPanel = bySelector("[data-editor-panel='products']");
     dom.editorCategoryList = bySelector("[data-editor-category-list]");
@@ -1108,7 +1183,6 @@
     dom.editorProductPanelTitle = bySelector("[data-editor-product-panel-title]");
     dom.editorProductPanelDescription = bySelector("[data-editor-product-panel-description]");
     dom.categorySelect = bySelector("[data-category-select]");
-    dom.colorRows = bySelector("[data-color-rows]");
     dom.confirmDialog = bySelector("[data-confirm-dialog]");
     dom.confirmTitle = bySelector("[data-confirm-title]");
     dom.confirmMessage = bySelector("[data-confirm-message]");
@@ -1156,6 +1230,15 @@
     });
   }
 
+  function firstAvailableVariant(product) {
+    if (!product) {
+      return null;
+    }
+    return product.variants.find(function (variant) {
+      return variant.available;
+    }) || null;
+  }
+
   function normalizeSearch(value) {
     return String(value || "")
       .normalize("NFD")
@@ -1193,16 +1276,8 @@
 
       var indexLabel = makeElement("span", "category-index", String(index + 1).padStart(2, "0"));
       var content = makeElement("div", "category-content");
-      var textWrap = makeElement("div");
       var title = makeElement("h3", "", category.name);
-      var description = makeElement("p", "", category.description);
-      textWrap.append(title, description);
-      var arrow = makeElement("span", "category-arrow");
-      arrow.append(
-        makeElement("span", "category-action-label", "Explorar coleção"),
-        makeIcon("fa-solid fa-arrow-right")
-      );
-      content.append(textWrap, arrow);
+      content.append(title);
       card.append(visual, indexLabel, content, mainButton);
 
       var edit = makeElement("button", "editor-card-action", "Editar");
@@ -1251,8 +1326,7 @@
       var searchable = [
         product.name,
         product.description,
-        category ? category.name : "",
-        product.variants.map(function (variant) { return variant.name; }).join(" ")
+        category ? category.name : ""
       ].join(" ");
       return normalizeSearch(searchable).indexOf(query) >= 0;
     });
@@ -1268,7 +1342,7 @@
       button.type = "button";
       button.dataset.action = "open-product";
       button.dataset.productId = product.id;
-      button.setAttribute("aria-label", "Ver cores de " + product.name);
+      button.setAttribute("aria-label", "Ver detalhes e escolher a metragem de " + product.name);
 
       var visual = createPhotoVisual(product, "product-visual", "Foto do produto não cadastrada");
       var overlay = makeElement("div", "product-visual-overlay");
@@ -1279,23 +1353,9 @@
       var infoText = makeElement("div");
       var unit = makeElement("small", "", "Venda por " + product.unit);
       var title = makeElement("h3", "", product.name);
-      var colorCount = product.variants.filter(function (variant) {
-        return variant.available;
-      }).length;
-      var colorsText = makeElement("p", "", colorCount + (colorCount === 1 ? " cor disponível" : " cores disponíveis"));
-      infoText.append(unit, title, colorsText);
-
-      var swatches = makeElement("div", "product-swatches");
-      product.variants.slice(0, 4).forEach(function (variant) {
-        var swatch = makeElement("i", "mini-swatch");
-        swatch.style.setProperty("--swatch", variant.hex);
-        swatch.title = variant.name;
-        swatches.appendChild(swatch);
-      });
-      if (product.variants.length > 4) {
-        swatches.appendChild(makeElement("span", "more-colors", "+" + (product.variants.length - 4)));
-      }
-      info.append(infoText, swatches);
+      var instruction = makeElement("p", "", "Escolha a metragem");
+      infoText.append(unit, title, instruction);
+      info.append(infoText, makeIcon("fa-solid fa-arrow-right"));
       card.append(visual, info, button);
 
       var edit = makeElement("button", "editor-card-action", "Editar");
@@ -1333,6 +1393,8 @@
 
   function renderProductDialog(product) {
     var category = findCategory(product.categoryId);
+    var variant = firstAvailableVariant(product);
+    state.selectedVariantId = variant ? variant.id : null;
     dom.productDialogCategory.textContent = category ? category.name : "Tecido";
     dom.productDialogName.textContent = product.name;
     dom.productDialogDescription.textContent = product.description;
@@ -1340,25 +1402,9 @@
     dom.productQuantity.min = String(product.minQuantity);
     dom.productQuantity.step = String(product.quantityStep);
     dom.productQuantity.value = formatInputNumber(product.minQuantity);
-    dom.selectedColor.textContent = "Selecione uma opção";
-    dom.addCartButton.disabled = true;
+    dom.addCartButton.disabled = !variant;
     updateAddCartButton();
     renderProductDialogVisual(product);
-
-    dom.colorOptions.replaceChildren();
-    product.variants.forEach(function (variant) {
-      var option = makeElement("button", "color-option");
-      option.type = "button";
-      option.dataset.action = "select-color";
-      option.dataset.variantId = variant.id;
-      option.setAttribute("aria-pressed", "false");
-      option.disabled = !variant.available;
-      var swatch = makeElement("i");
-      swatch.style.setProperty("--swatch", variant.hex);
-      swatch.style.setProperty("--swatch-contrast", getContrastColor(variant.hex));
-      option.append(swatch, document.createTextNode(variant.name));
-      dom.colorOptions.appendChild(option);
-    });
   }
 
   function renderProductDialogVisual(product, variant) {
@@ -1374,36 +1420,19 @@
       return;
     }
     state.currentProductId = product.id;
-    state.selectedVariantId = null;
     renderProductDialog(product);
     openDialog(dom.productDialog);
-  }
-
-  function selectColor(variantId) {
-    var product = findProduct(state.currentProductId);
-    var variant = findVariant(product, variantId);
-    if (!product || !variant || !variant.available) {
-      return;
-    }
-    state.selectedVariantId = variant.id;
-    allBySelector(".color-option", dom.colorOptions).forEach(function (button) {
-      var selected = button.dataset.variantId === variant.id;
-      button.setAttribute("aria-pressed", String(selected));
-    });
-    dom.selectedColor.textContent = variant.name;
-    dom.addCartButton.disabled = false;
-    updateAddCartButton();
-    renderProductDialogVisual(product, variant);
   }
 
   function updateAddCartButton() {
     var product = findProduct(state.currentProductId);
     var variant = findVariant(product, state.selectedVariantId);
-    var label = "Escolha uma cor";
+    var label = "Produto indisponível";
     if (product && variant && variant.available) {
       var quantity = clampProductQuantity(product, dom.productQuantity.value);
-      label = "Adicionar " + formatNumber(quantity) + " " + shortUnit(product.unit, quantity) + " • " + variant.name;
+      label = "Adicionar " + formatNumber(quantity) + " " + shortUnit(product.unit, quantity) + " à seleção";
     }
+    dom.addCartButton.disabled = !(product && variant && variant.available);
     dom.addCartButton.querySelector("span").textContent = label;
   }
 
@@ -1436,7 +1465,7 @@
     var product = findProduct(state.currentProductId);
     var variant = findVariant(product, state.selectedVariantId);
     if (!product || !variant || !variant.available) {
-      showToast("Escolha uma cor", "Selecione uma opção disponível antes de adicionar.", "error");
+      showToast("Tecido indisponível", "Este item não está disponível no momento.", "error");
       return;
     }
     var category = findCategory(product.categoryId);
@@ -1452,7 +1481,7 @@
       reachedLimit = combined > 999;
     } else {
       if (state.cart.items.length >= 60) {
-        showToast("Seleção muito extensa", "Solicite este orçamento antes de adicionar novas opções.", "error");
+        showToast("Seleção muito extensa", "Envie este pedido antes de adicionar novos tecidos.", "error");
         return;
       }
       state.cart.items.push({
@@ -1467,18 +1496,18 @@
           colorName: variant.name,
           colorHex: variant.hex,
           unit: product.unit,
-          image: getVariantImageEntity(product, variant).image,
-          imageId: getVariantImageEntity(product, variant).imageId
+          image: product.image,
+          imageId: product.imageId
         }
       });
     }
     saveCart();
     renderCart();
     bumpCartCount();
-    announce(product.name + ", cor " + variant.name + ", adicionado à seleção.");
+    announce(product.name + " adicionado à seleção.");
     showToast(
       reachedLimit ? "Quantidade ajustada ao limite" : "Adicionado à seleção",
-      product.name + " • " + variant.name,
+      product.name + " • " + formatNumber(quantity) + " " + shortUnit(product.unit, quantity),
       "success"
     );
     closeDialog(dom.productDialog);
@@ -1496,8 +1525,8 @@
       colorName: variant ? variant.name : item.snapshot.colorName,
       colorHex: variant ? variant.hex : item.snapshot.colorHex,
       unit: product ? product.unit : item.snapshot.unit,
-      image: product && variant ? getVariantImageEntity(product, variant).image : item.snapshot.image,
-      imageId: product && variant ? getVariantImageEntity(product, variant).imageId : item.snapshot.imageId,
+      image: product ? product.image : item.snapshot.image,
+      imageId: product ? product.imageId : item.snapshot.imageId,
       valid: Boolean(product && variant && variant.available)
     };
   }
@@ -1520,10 +1549,6 @@
       var info = makeElement("div", "cart-item-info");
       var category = makeElement("small", "", resolved.categoryName);
       var title = makeElement("h3", "", resolved.name);
-      var color = makeElement("p", "cart-item-color");
-      var colorDot = makeElement("i");
-      colorDot.style.setProperty("--swatch", resolved.colorHex);
-      color.append(colorDot, document.createTextNode(resolved.colorName));
 
       var bottom = makeElement("div", "cart-item-bottom");
       var control = makeElement("div", "quantity-control");
@@ -1548,7 +1573,7 @@
       increase.setAttribute("aria-label", "Aumentar " + resolved.name);
       control.append(decrease, input, increase);
       bottom.append(control, makeElement("span", "", shortUnit(resolved.unit, item.quantity)));
-      info.append(category, title, color, bottom);
+      info.append(category, title, bottom);
 
       var remove = makeElement("button", "remove-cart-item");
       remove.type = "button";
@@ -1559,7 +1584,7 @@
       row.append(visual, info, remove);
       if (!resolved.valid) {
         row.classList.add("is-unavailable");
-        row.title = "Esta opção não está mais disponível no catálogo.";
+        row.title = "Este tecido não está mais disponível no catálogo.";
       }
       dom.cartItems.appendChild(row);
     });
@@ -1572,14 +1597,15 @@
     dom.cartLinesLabel.textContent = lineCount ? "(" + lineCount + ")" : "";
     dom.cartLineCount.textContent = String(lineCount);
     dom.cartTotalQuantity.textContent = formatCartQuantitySummary();
+    dom.cartCheckout.dataset.whatsappUrl = lineCount ? buildWhatsAppUrl() : "";
     allBySelector("[data-cart-count]").forEach(function (counter) {
       counter.textContent = String(lineCount);
-      counter.setAttribute("aria-label", lineCount + (lineCount === 1 ? " opção selecionada" : " opções selecionadas"));
+      counter.setAttribute("aria-label", lineCount + (lineCount === 1 ? " item selecionado" : " itens selecionados"));
     });
     if (dom.cartTrigger) {
       dom.cartTrigger.setAttribute(
         "aria-label",
-        "Abrir seleção, " + lineCount + (lineCount === 1 ? " opção" : " opções")
+        "Abrir seleção, " + lineCount + (lineCount === 1 ? " item" : " itens")
       );
       dom.cartTrigger.classList.toggle("has-items", lineCount > 0);
     }
@@ -1696,107 +1722,54 @@
     });
   }
 
-  function makeQuoteCode() {
-    var now = new Date();
-    var datePart = String(now.getFullYear()).slice(-2) +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      String(now.getDate()).padStart(2, "0");
-    var randomPart = makeId("quote").replace(/[^A-Za-z0-9]/g, "").slice(-4).toUpperCase();
-    return "FA-" + datePart + "-" + randomPart;
-  }
-
-  function buildWhatsAppMessage(details, quoteCode) {
+  function buildWhatsAppMessage() {
     var divider = "--------------------------------";
     var lines = [
       "Olá, Fio a Fio.",
-      "Gostaria de solicitar um orçamento para os itens abaixo.",
-      "",
-      "CÓDIGO: " + quoteCode,
+      "Montei este pedido pelo site e gostaria de confirmar os itens abaixo.",
       "",
       divider,
-      "DADOS PARA ATENDIMENTO",
-      divider,
-      "Nome: " + details.name,
-      "Cidade/Estado: " + details.city + "/" + details.state,
-      "Recebimento: " + details.fulfillment
-    ];
-    if (details.postalCode) {
-      lines.push("CEP: " + details.postalCode);
-    }
-    if (details.notes) {
-      lines.push("Observações: " + details.notes);
-    }
-    lines.push(
-      "",
-      divider,
-      "ITENS SELECIONADOS",
+      "MEU PEDIDO",
       divider
-    );
+    ];
     state.cart.items.forEach(function (item, index) {
       var resolved = resolveCartItem(item);
       lines.push("");
       lines.push("ITEM " + (index + 1));
       lines.push("Produto: " + resolved.name);
       lines.push("Categoria: " + resolved.categoryName);
-      lines.push("Cor: " + resolved.colorName);
       lines.push("Quantidade: " + formatNumber(item.quantity) + " " + pluralUnit(resolved.unit, item.quantity));
       lines.push(divider);
     });
     lines.push("");
     lines.push("RESUMO DA SELEÇÃO");
-    lines.push("Itens selecionados: " + state.cart.items.length + (state.cart.items.length === 1 ? " opção" : " opções"));
+    lines.push("Tecidos selecionados: " + state.cart.items.length);
     lines.push("Quantidade total: " + formatCartQuantitySummary());
     lines.push(divider);
     lines.push("");
-    lines.push("Podem confirmar disponibilidade, valores e opções de envio?");
+    lines.push("Podem confirmar a disponibilidade, os valores e as opções de entrega?");
     return lines.join("\n");
   }
 
-  function fillQuoteForm() {
-    var details = state.quoteDetails || normalizeQuoteDetails({});
-    dom.quoteName.value = details.name || "";
-    dom.quoteCity.value = details.city || "";
-    dom.quoteState.value = details.state || "";
-    dom.quoteFulfillment.value = details.fulfillment || "Quero consultar as opções";
-    dom.quotePostalCode.value = details.postalCode || "";
-    dom.quoteNotes.value = details.notes || "";
+  function buildWhatsAppUrl() {
+    return "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(buildWhatsAppMessage());
   }
 
   function checkout() {
     if (!state.cart.items.length) {
-      showToast("Seleção vazia", "Escolha ao menos um tecido antes de solicitar o orçamento.", "error");
+      showToast("Seleção vazia", "Escolha ao menos um tecido antes de finalizar o pedido.", "error");
       return;
     }
     var unavailable = state.cart.items.some(function (item) {
       return !resolveCartItem(item).valid;
     });
     if (unavailable) {
-      showToast("Revise a seleção", "Remova as opções que não estão mais disponíveis.", "error");
+      showToast("Revise a seleção", "Remova os tecidos que não estão mais disponíveis.", "error");
       return;
     }
-    fillQuoteForm();
-    closeDialog(dom.cartDialog);
-    window.setTimeout(function () {
-      openDialog(dom.quoteDialog);
-      dom.quoteName.focus();
-    }, 0);
-  }
-
-  function submitQuote(event) {
-    event.preventDefault();
-    var details = normalizeQuoteDetails({
-      name: dom.quoteName.value,
-      city: dom.quoteCity.value,
-      state: dom.quoteState.value,
-      fulfillment: dom.quoteFulfillment.value,
-      postalCode: dom.quotePostalCode.value,
-      notes: dom.quoteNotes.value
-    });
-    saveQuoteDetails(details);
-    var message = buildWhatsAppMessage(details, makeQuoteCode());
-    var url = "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(message);
+    var url = buildWhatsAppUrl();
     if (url.length > 7500) {
-      showToast("Orçamento muito extenso", "Divida a seleção em duas solicitações para enviar pelo WhatsApp.", "error");
+      showToast("Pedido muito extenso", "Divida a seleção em dois pedidos para enviar pelo WhatsApp.", "error");
       return;
     }
     window.location.assign(url);
@@ -1820,8 +1793,36 @@
     renderCatalog();
   }
 
+  function updateBackendUi() {
+    var remote = usingBackend();
+    allBySelector("[data-local-only-action]").forEach(function (node) {
+      node.hidden = remote;
+    });
+    dom.editorPassword.inputMode = "numeric";
+    dom.editorPassword.maxLength = 8;
+    dom.editorAccessDescription.textContent = "Digite a senha para habilitar as ferramentas de edição neste dispositivo.";
+    if (remote) {
+      dom.editorModeLabel.textContent = "Editor conectado";
+      dom.editorModeDescription.textContent = "Gerencie o catálogo compartilhado por todos os dispositivos.";
+      dom.editorNoticeTitle.textContent = "Catálogo conectado ao Supabase.";
+      dom.editorNoticeText.textContent = "Categorias, produtos e fotos são publicados para todos os visitantes após cada alteração.";
+      dom.editorBarTitle.textContent = "Editor conectado ativo";
+      dom.editorBarDetail.textContent = "As mudanças são sincronizadas com o Supabase.";
+    } else {
+      dom.editorModeLabel.textContent = "Editor local";
+      dom.editorModeDescription.textContent = "Personalize o catálogo salvo neste navegador.";
+      dom.editorNoticeTitle.textContent = "Este é um editor local.";
+      dom.editorNoticeText.textContent = "Alterações aparecem somente neste dispositivo. Configure o Supabase para sincronizar o catálogo e as fotos.";
+      dom.editorBarTitle.textContent = "Modo editor local ativo";
+      dom.editorBarDetail.textContent = "As mudanças ficam salvas neste navegador.";
+    }
+  }
+
   function setEditorMode(enabled, openManager) {
     state.editorMode = Boolean(enabled);
+    if (usingBackend() && typeof backend().setEditorEnabled === "function") {
+      backend().setEditorEnabled(state.editorMode);
+    }
     try {
       localStorage.setItem(STORAGE_KEYS.editor, state.editorMode ? "1" : "0");
     } catch (error) {
@@ -1862,6 +1863,7 @@
 
   function resetEditorAccessForm() {
     dom.editorAccessForm.reset();
+    updateBackendUi();
     dom.editorPassword.type = "password";
     dom.editorPassword.removeAttribute("aria-invalid");
     dom.editorAccessError.textContent = "Senha incorreta. Tente novamente.";
@@ -1915,7 +1917,7 @@
     });
   }
 
-  function submitEditorAccess(event) {
+  async function submitEditorAccess(event) {
     event.preventDefault();
     var password = dom.editorPassword.value.trim();
     dom.editorPassword.removeAttribute("aria-invalid");
@@ -1923,7 +1925,20 @@
     dom.editorAccessSubmit.disabled = true;
     dom.editorAccessSubmit.querySelector("span").textContent = "Verificando…";
 
-    verifyEditorPassword(password).then(function (allowed) {
+    try {
+      var allowed = await verifyEditorPassword(password);
+      if (allowed && usingBackend()) {
+        backend().setEditorEnabled(true);
+        var remoteCatalog = await backend().loadCatalog();
+        if (remoteCatalog) {
+          state.catalog = normalizeCatalog(remoteCatalog);
+          saveCatalog({ skipBackup: true });
+          reconcileCart();
+          saveCart();
+        } else {
+          await backend().syncCatalog(state.catalog);
+        }
+      }
       if (!allowed) {
         dom.editorPassword.setAttribute("aria-invalid", "true");
         dom.editorAccessError.hidden = false;
@@ -1936,14 +1951,24 @@
 
       closeDialog(dom.editorAccessDialog);
       setEditorMode(true, true);
-      showToast("Editor habilitado", "As ferramentas de edição foram liberadas neste dispositivo.", "success");
-    }).catch(function () {
-      dom.editorAccessError.textContent = "Não foi possível validar a senha neste navegador.";
+      renderAll();
+      renderEditor();
+      showToast(
+        "Editor habilitado",
+        usingBackend() ? "Catálogo conectado e pronto para edição." : "As ferramentas foram liberadas neste dispositivo.",
+        "success"
+      );
+    } catch (error) {
+      if (usingBackend()) {
+        backend().setEditorEnabled(false);
+      }
+      dom.editorPassword.setAttribute("aria-invalid", "true");
+      dom.editorAccessError.textContent = error.message || "Não foi possível validar o acesso.";
       dom.editorAccessError.hidden = false;
-    }).finally(function () {
+    } finally {
       dom.editorAccessSubmit.disabled = false;
       dom.editorAccessSubmit.querySelector("span").textContent = "Entrar no editor";
-    });
+    }
   }
 
   function isAtPageEnd() {
@@ -2051,7 +2076,7 @@
       var info = makeElement("div", "editor-item-info");
       info.append(
         makeElement("strong", "", product.name),
-        makeElement("small", "", (category ? category.name + " • " : "") + product.variants.length + (product.variants.length === 1 ? " cor" : " cores"))
+        makeElement("small", "", (category ? category.name + " • " : "") + "Venda por " + product.unit)
       );
       var actions = makeElement("div", "editor-item-actions");
       var edit = makeElement("button");
@@ -2114,9 +2139,6 @@
   }
 
   function renderEditorStats() {
-    var colorCount = state.catalog.products.reduce(function (total, product) {
-      return total + product.variants.length;
-    }, 0);
     allBySelector("[data-editor-category-count]").forEach(function (node) {
       node.textContent = String(state.catalog.categories.length);
     });
@@ -2125,7 +2147,6 @@
     });
     bySelector("[data-stat-categories]").textContent = String(state.catalog.categories.length);
     bySelector("[data-stat-products]").textContent = String(state.catalog.products.length);
-    bySelector("[data-stat-colors]").textContent = String(colorCount);
   }
 
   function switchEditorTab(tabName) {
@@ -2210,46 +2231,64 @@
     var category = existing || {
       id: makeId("cat"),
       sortOrder: (state.catalog.categories.length + 1) * 10,
-      imageId: ""
+      imageId: "",
+      imagePath: ""
     };
     var oldImageId = existing ? existing.imageId || "" : "";
+    var oldImagePath = existing ? existing.imagePath || "" : "";
     var newImageId = oldImageId;
-    var storedImageId = "";
+    var newImagePath = oldImagePath;
+    var newImage = existing ? existing.image || "" : "";
+    var storedPhoto = null;
     setSubmitBusy(dom.categoryForm, true);
     try {
       if (state.categoryPhotoDraft.mode === "replace" && state.categoryPhotoDraft.processed) {
-        storedImageId = await storeProcessedMedia(state.categoryPhotoDraft.processed);
-        newImageId = storedImageId;
+        storedPhoto = await storeCatalogPhoto("categories", category.id, state.categoryPhotoDraft.processed);
+        newImageId = storedPhoto.imageId;
+        newImagePath = storedPhoto.imagePath;
+        newImage = storedPhoto.image;
       } else if (state.categoryPhotoDraft.mode === "remove") {
         newImageId = "";
+        newImagePath = "";
+        newImage = "";
       }
       category.name = name;
       category.description = cleanText(dom.categoryForm.elements.description.value, 180);
       category.imageId = newImageId;
-      if (state.categoryPhotoDraft.mode === "replace" || state.categoryPhotoDraft.mode === "remove") {
-        category.image = "";
-      }
+      category.imagePath = newImagePath;
+      category.image = newImage;
       category.imageAlt = name;
+      if (usingBackend()) {
+        await backend().saveCategory(category);
+      }
       if (!existing) {
         state.catalog.categories.push(category);
       }
-      if (commitState(previousCatalog, null)) {
+      if (commitCatalogMutation(previousCatalog, null)) {
         hideCategoryForm();
         renderAll();
         renderEditor();
-        await deleteMediaIfUnused(oldImageId);
+        if (oldImageId !== newImageId || oldImagePath !== newImagePath) {
+          await deleteCatalogPhoto(oldImageId, oldImagePath);
+        }
         showToast(existing ? "Categoria atualizada" : "Categoria criada", category.name + " já aparece na vitrine.", "success");
-      } else {
-        if (storedImageId) {
-          await mediaDelete(storedImageId);
+      } else if (storedPhoto) {
+        if (storedPhoto.imagePath && usingBackend()) {
+          await backend().deleteImage(storedPhoto.imagePath);
+        } else if (storedPhoto.imageId) {
+          await mediaDelete(storedPhoto.imageId);
         }
         renderAll();
         renderEditor();
       }
     } catch (saveError) {
       state.catalog = previousCatalog;
-      if (storedImageId) {
-        await mediaDelete(storedImageId);
+      if (storedPhoto) {
+        if (storedPhoto.imagePath && usingBackend()) {
+          await backend().deleteImage(storedPhoto.imagePath).catch(function () {});
+        } else if (storedPhoto.imageId) {
+          await mediaDelete(storedPhoto.imageId);
+        }
       }
       showToast("Não foi possível salvar", saveError.message || "Tente outra foto.", "error");
       renderAll();
@@ -2281,7 +2320,18 @@
       var mediaIds = [category.imageId].concat(products.reduce(function (ids, product) {
         return ids.concat(product.imageId || "", product.variants.map(function (variant) { return variant.imageId || ""; }));
       }, [])).filter(Boolean);
+      var mediaPaths = [category.imagePath].concat(products.map(function (product) {
+        return product.imagePath || "";
+      })).filter(Boolean);
       var productIds = new Set(products.map(function (product) { return product.id; }));
+      if (usingBackend()) {
+        try {
+          await backend().deleteCategory(category.id);
+        } catch (error) {
+          showToast("Não foi possível excluir", error.message || "Verifique sua conexão e tente novamente.", "error");
+          return;
+        }
+      }
       state.catalog.categories = state.catalog.categories.filter(function (item) {
         return item.id !== category.id;
       });
@@ -2297,7 +2347,7 @@
       if (state.editorCategoryId === category.id) {
         state.editorCategoryId = null;
       }
-      var saved = commitState(previousCatalog, previousCart);
+      var saved = commitCatalogMutation(previousCatalog, previousCart);
       if (!saved) {
         state.activeCategory = previousActiveCategory;
       }
@@ -2306,6 +2356,11 @@
       if (saved) {
         switchEditorTab("categories");
         await Promise.all(mediaIds.map(deleteMediaIfUnused));
+        if (usingBackend()) {
+          await Promise.all(mediaPaths.map(function (path) {
+            return backend().deleteImage(path).catch(function () {});
+          }));
+        }
         showToast("Categoria excluída", category.name + " foi removida da vitrine.", "success");
       }
     });
@@ -2455,13 +2510,9 @@
     clearVariantPhotoDrafts();
     renderStoredPhoto(dom.productPhotoPreview, "", "", "", "Nenhuma foto selecionada");
     dom.productPhotoRemove.hidden = true;
-    dom.colorRows.replaceChildren();
-    addColorRow();
     bySelector("[data-product-form-title]").textContent = "Novo tecido";
     bySelector("[data-error-for='product-name']").textContent = "";
-    bySelector("[data-error-for='product-colors']").textContent = "";
     dom.productForm.elements.name.removeAttribute("aria-invalid");
-    bySelector(".variant-editor", dom.productForm).removeAttribute("aria-invalid");
     renderEditorCategorySelect();
   }
 
@@ -2487,10 +2538,6 @@
       state.productPhotoDraft.existingLegacy = product.image || "";
       renderStoredPhoto(dom.productPhotoPreview, product.imageId, product.image, "Prévia de " + product.name, "Nenhuma foto cadastrada");
       dom.productPhotoRemove.hidden = !(product.imageId || product.image);
-      dom.colorRows.replaceChildren();
-      product.variants.forEach(function (variant) {
-        addColorRow(variant);
-      });
       bySelector("[data-product-form-title]").textContent = "Editar tecido";
     }
     dom.productForm.hidden = false;
@@ -2536,13 +2583,12 @@
 
   async function submitProductForm(event) {
     event.preventDefault();
-    if (dom.productPhotoPreview.classList.contains("is-processing") || bySelector(".variant-photo-preview.is-processing", dom.productForm)) {
+    if (dom.productPhotoPreview.classList.contains("is-processing")) {
       showToast("Aguarde a foto", "A imagem ainda está sendo preparada.", "error");
       return;
     }
     var name = cleanText(dom.productForm.elements.name.value, 80);
     var nameError = bySelector("[data-error-for='product-name']");
-    var colorsError = bySelector("[data-error-for='product-colors']");
     if (!name) {
       nameError.textContent = "Informe o nome do tecido.";
       dom.productForm.elements.name.setAttribute("aria-invalid", "true");
@@ -2551,18 +2597,6 @@
     }
     nameError.textContent = "";
     dom.productForm.elements.name.removeAttribute("aria-invalid");
-    var colors = collectProductColors();
-    if (!colors.length) {
-      colorsError.textContent = "Adicione ao menos uma cor com nome.";
-      bySelector(".variant-editor", dom.productForm).setAttribute("aria-invalid", "true");
-      var firstColorName = bySelector(".color-editor-row input[type='text']", dom.colorRows);
-      if (firstColorName) {
-        firstColorName.focus();
-      }
-      return;
-    }
-    colorsError.textContent = "";
-    bySelector(".variant-editor", dom.productForm).removeAttribute("aria-invalid");
     var categoryId = dom.productForm.elements.categoryId.value;
     var category = findCategory(categoryId);
     if (!category) {
@@ -2579,20 +2613,37 @@
       quantityStep: 0.5,
       sortOrder: (state.catalog.products.length + 1) * 10,
       image: "",
-      imageId: ""
+      imageId: "",
+      imagePath: ""
     };
     var oldImageId = existing ? existing.imageId || "" : "";
+    var oldImagePath = existing ? existing.imagePath || "" : "";
     var oldVariantImageIds = existing ? existing.variants.map(function (variant) { return variant.imageId || ""; }).filter(Boolean) : [];
+    var existingVariant = existing ? firstAvailableVariant(existing) || existing.variants[0] : null;
+    var defaultVariant = {
+      id: existingVariant && isValidId(existingVariant.id) ? existingVariant.id : makeId("var"),
+      name: "Padrão",
+      hex: "#777777",
+      available: true,
+      image: "",
+      imageId: "",
+      imageAlt: name
+    };
     var newImageId = oldImageId;
-    var storedImageId = "";
-    var storedVariantImageIds = [];
+    var newImagePath = oldImagePath;
+    var newImage = existing ? existing.image || "" : "";
+    var storedPhoto = null;
     setSubmitBusy(dom.productForm, true);
     try {
       if (state.productPhotoDraft.mode === "replace" && state.productPhotoDraft.processed) {
-        storedImageId = await storeProcessedMedia(state.productPhotoDraft.processed);
-        newImageId = storedImageId;
+        storedPhoto = await storeCatalogPhoto("products", product.id, state.productPhotoDraft.processed);
+        newImageId = storedPhoto.imageId;
+        newImagePath = storedPhoto.imagePath;
+        newImage = storedPhoto.image;
       } else if (state.productPhotoDraft.mode === "remove") {
         newImageId = "";
+        newImagePath = "";
+        newImage = "";
       }
       product.name = name;
       product.categoryId = category.id;
@@ -2601,68 +2652,60 @@
       product.minQuantity = product.unit === "metro" ? 0.5 : 1;
       product.quantityStep = product.unit === "metro" ? 0.5 : 1;
       product.imageId = newImageId;
+      product.imagePath = newImagePath;
+      product.image = newImage;
       product.imageAlt = name;
-      if (state.productPhotoDraft.mode === "replace" || state.productPhotoDraft.mode === "remove") {
-        product.image = "";
+      product.variants = [defaultVariant];
+      if (usingBackend()) {
+        await backend().saveProduct(product);
       }
-      for (var colorIndex = 0; colorIndex < colors.length; colorIndex += 1) {
-        var color = colors[colorIndex];
-        var draft = state.variantPhotoDrafts.get(color.draftKey);
-        if (draft && draft.mode === "replace" && draft.processed) {
-          color.imageId = await storeProcessedMedia(draft.processed);
-          color.image = "";
-          storedVariantImageIds.push(color.imageId);
-        } else if (draft && draft.mode === "remove") {
-          color.imageId = "";
-          color.image = "";
-        }
-        delete color.draftKey;
-      }
-      product.variants = colors;
       if (!existing) {
         state.catalog.products.push(product);
       }
-      var colorIds = new Set(colors.map(function (variant) { return variant.id; }));
-      state.cart.items = state.cart.items.filter(function (item) {
-        return item.productId !== product.id || colorIds.has(item.variantId);
-      });
       state.cart.items.forEach(function (item) {
         if (item.productId === product.id) {
-          var liveVariant = findVariant(product, item.variantId);
+          item.variantId = defaultVariant.id;
           item.quantity = clampProductQuantity(product, item.quantity);
           item.snapshot.productName = product.name;
           item.snapshot.categoryName = category.name;
-          item.snapshot.colorName = liveVariant ? liveVariant.name : item.snapshot.colorName;
-          item.snapshot.colorHex = liveVariant ? liveVariant.hex : item.snapshot.colorHex;
+          item.snapshot.colorName = "Padrão";
+          item.snapshot.colorHex = "#777777";
           item.snapshot.unit = product.unit;
-          var cartImage = liveVariant ? getVariantImageEntity(product, liveVariant) : product;
-          item.snapshot.image = cartImage.image || "";
-          item.snapshot.imageId = cartImage.imageId || "";
+          item.snapshot.image = product.image || "";
+          item.snapshot.imageId = product.imageId || "";
         }
       });
+      state.cart = prepareDirectOrderCart(state.cart);
       state.editorCategoryId = category.id;
-      if (commitState(previousCatalog, previousCart)) {
+      if (commitCatalogMutation(previousCatalog, previousCart)) {
         hideProductForm();
         renderAll();
         renderEditor();
         switchEditorTab("products");
         await Promise.all([oldImageId].concat(oldVariantImageIds).map(deleteMediaIfUnused));
-        showToast(existing ? "Tecido atualizado" : "Tecido adicionado", product.name + " já aparece na vitrine.", "success");
-      } else {
-        if (storedImageId) {
-          await mediaDelete(storedImageId);
+        if (oldImagePath !== newImagePath) {
+          await deleteCatalogPhoto("", oldImagePath);
         }
-        await Promise.all(storedVariantImageIds.map(mediaDelete));
+        showToast(existing ? "Tecido atualizado" : "Tecido adicionado", product.name + " já aparece na vitrine.", "success");
+      } else if (storedPhoto) {
+        if (storedPhoto.imagePath && usingBackend()) {
+          await backend().deleteImage(storedPhoto.imagePath);
+        } else if (storedPhoto.imageId) {
+          await mediaDelete(storedPhoto.imageId);
+        }
         renderAll();
         renderEditor();
       }
     } catch (saveError) {
       state.catalog = previousCatalog;
       state.cart = previousCart;
-      if (storedImageId) {
-        await mediaDelete(storedImageId);
+      if (storedPhoto) {
+        if (storedPhoto.imagePath && usingBackend()) {
+          await backend().deleteImage(storedPhoto.imagePath).catch(function () {});
+        } else if (storedPhoto.imageId) {
+          await mediaDelete(storedPhoto.imageId);
+        }
       }
-      await Promise.all(storedVariantImageIds.map(mediaDelete));
       showToast("Não foi possível salvar", saveError.message || "Tente outra foto.", "error");
       renderAll();
       renderEditor();
@@ -2678,21 +2721,32 @@
     }
     askConfirm(
       "Excluir tecido?",
-      "“" + product.name + "” e suas cores serão removidos. Se estiver na seleção, também será retirado.",
+      "“" + product.name + "” será removido. Se estiver na seleção, também será retirado.",
       async function () {
         var previousCatalog = clone(state.catalog);
         var previousCart = clone(state.cart);
+        if (usingBackend()) {
+          try {
+            await backend().deleteProduct(product.id);
+          } catch (error) {
+            showToast("Não foi possível excluir", error.message || "Verifique sua conexão e tente novamente.", "error");
+            return;
+          }
+        }
         state.catalog.products = state.catalog.products.filter(function (item) {
           return item.id !== product.id;
         });
         state.cart.items = state.cart.items.filter(function (item) {
           return item.productId !== product.id;
         });
-        var saved = commitState(previousCatalog, previousCart);
+        var saved = commitCatalogMutation(previousCatalog, previousCart);
         renderAll();
         renderEditor();
         if (saved) {
           await Promise.all([product.imageId].concat(product.variants.map(function (variant) { return variant.imageId || ""; })).filter(Boolean).map(deleteMediaIfUnused));
+          if (usingBackend() && product.imagePath) {
+            await backend().deleteImage(product.imagePath).catch(function () {});
+          }
           showToast("Tecido excluído", product.name + " foi removido da vitrine.", "success");
         }
       }
@@ -2882,7 +2936,7 @@
   function resetCatalog() {
     askConfirm(
       "Restaurar catálogo original?",
-      "Todas as categorias, tecidos e cores adicionados neste navegador serão substituídos pela demonstração inicial.",
+      "Todas as categorias e tecidos adicionados neste navegador serão substituídos pela demonstração inicial.",
       async function () {
         var previousCatalog = clone(state.catalog);
         var previousCart = clone(state.cart);
@@ -3128,16 +3182,6 @@
       case "close-cart":
         closeDialog(dom.cartDialog);
         break;
-      case "close-quote":
-        closeDialog(dom.quoteDialog);
-        break;
-      case "back-to-cart":
-        closeDialog(dom.quoteDialog);
-        window.setTimeout(function () {
-          renderCart();
-          openDialog(dom.cartDialog);
-        }, 0);
-        break;
       case "continue-shopping":
         closeDialog(dom.cartDialog);
         bySelector("#tecidos").scrollIntoView({ behavior: "smooth" });
@@ -3154,9 +3198,6 @@
         break;
       case "close-product":
         closeDialog(dom.productDialog);
-        break;
-      case "select-color":
-        selectColor(button.dataset.variantId);
         break;
       case "decrease-product-qty":
         changeProductQuantity(-1);
@@ -3300,13 +3341,6 @@
     });
 
     dom.productQuantity.addEventListener("input", updateAddCartButton);
-    dom.quoteState.addEventListener("input", function () {
-      dom.quoteState.value = dom.quoteState.value.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 2);
-    });
-    dom.quotePostalCode.addEventListener("input", function () {
-      var digits = dom.quotePostalCode.value.replace(/\D/g, "").slice(0, 8);
-      dom.quotePostalCode.value = digits.length > 5 ? digits.slice(0, 5) + "-" + digits.slice(5) : digits;
-    });
 
     document.addEventListener("change", function (event) {
       if (event.target.matches("[data-action='cart-qty-input']")) {
@@ -3379,7 +3413,6 @@
 
     dom.categoryForm.addEventListener("submit", submitCategoryForm);
     dom.productForm.addEventListener("submit", submitProductForm);
-    dom.quoteForm.addEventListener("submit", submitQuote);
     dom.editorAccessForm.addEventListener("submit", submitEditorAccess);
     dom.editorPassword.addEventListener("input", function () {
       dom.editorPassword.removeAttribute("aria-invalid");
@@ -3432,7 +3465,7 @@
     });
     dom.editorSecretTrigger.addEventListener("blur", cancelEditorHold);
 
-    [dom.productDialog, dom.cartDialog, dom.quoteDialog, dom.editorAccessDialog, dom.editorDialog, dom.confirmDialog].forEach(function (dialog) {
+    [dom.productDialog, dom.cartDialog, dom.editorAccessDialog, dom.editorDialog, dom.confirmDialog].forEach(function (dialog) {
       dialog.addEventListener("close", syncDialogBody);
       dialog.addEventListener("cancel", function (event) {
         if (dialog === dom.confirmDialog) {
@@ -3455,7 +3488,6 @@
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         closeDialog(dom.cartDialog);
-        closeDialog(dom.quoteDialog);
         bySelector("#tecidos").scrollIntoView({ behavior: "smooth" });
         window.setTimeout(function () {
           dom.search.focus();
@@ -3526,16 +3558,31 @@
     });
   }
 
-  function init() {
+  async function init() {
     cacheDom();
     state.catalog = loadCatalog();
-    state.cart = loadCart();
-    state.quoteDetails = loadQuoteDetails();
+    if (backend() && backend().isConfigured()) {
+      try {
+        var backendState = await backend().init();
+        state.backendConfigured = backendState.configured;
+        var remoteCatalog = await backend().loadCatalog();
+        if (remoteCatalog) {
+          state.catalog = normalizeCatalog(remoteCatalog);
+          saveCatalog({ skipBackup: true });
+        }
+      } catch (error) {
+        state.backendConfigured = false;
+        console.warn("Supabase indisponível; usando catálogo local.", error);
+      }
+    }
+    state.cart = prepareDirectOrderCart(loadCart());
+    saveCart();
     try {
       state.editorMode = localStorage.getItem(STORAGE_KEYS.editor) === "1";
     } catch (error) {
       state.editorMode = false;
     }
+    updateBackendUi();
     setupObservers();
     setupMediaSync();
     renderAll();
@@ -3546,5 +3593,7 @@
     handleScroll();
   }
 
-  init();
+  init().catch(function (error) {
+    console.error("Não foi possível iniciar a vitrine.", error);
+  });
 })();

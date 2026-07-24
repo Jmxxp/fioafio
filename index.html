@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#030405" />
     <meta
       name="description"
-      content="Fio a Fio — casa de tecidos em São João da Boa Vista desde 2013. Escolha produtos, cores e quantidades e solicite seu orçamento pelo WhatsApp."
+      content="Fio a Fio — casa de tecidos em São João da Boa Vista desde 2013. Escolha os tecidos, informe a metragem e envie seu pedido direto pelo WhatsApp."
     />
     <meta property="og:title" content="Fio a Fio | Casa de Tecidos" />
     <meta
       property="og:description"
-      content="Escolha tecidos e cores e solicite seu orçamento pelo WhatsApp."
+      content="Escolha seus tecidos, informe a metragem e envie o pedido direto pelo WhatsApp."
     />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="assets/hero-fio-a-fio.png" />
-    <title>Fio a Fio | Tecidos selecionados e orçamentos para todo o Brasil</title>
+    <title>Fio a Fio | Escolha tecidos e peça pelo WhatsApp</title>
     <link rel="icon" href="assets/fioafiologo.svg" type="image/svg+xml" />
     <link rel="preload" href="assets/hero-fio-a-fio.png" as="image" />
     <link rel="preload" href="assets/fioafiologo.svg" as="image" type="image/svg+xml" />
@@ -26,10 +26,10 @@
     <link rel="stylesheet" href="styles/legacy/interactions.css" />
     <link rel="stylesheet" href="styles/components/premium-shell.css" />
     <link rel="stylesheet" href="styles/components/mobile-shopping.css" />
-    <link rel="stylesheet" href="styles/components/quote-flow.css" />
     <link rel="stylesheet" href="styles/components/cart-drawer.css" />
     <link rel="stylesheet" href="styles/components/company-card.css" />
     <link rel="stylesheet" href="styles/components/editor-access.css" />
+    <link rel="stylesheet" href="styles/components/direct-order.css" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -85,7 +85,7 @@
             class="cart-trigger"
             type="button"
             data-action="open-cart"
-            aria-label="Abrir seleção, 0 opções"
+            aria-label="Abrir seleção, 0 itens"
           >
             <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
             <span class="cart-trigger-label">Seleção</span>
@@ -146,8 +146,8 @@
               <em>no tecido certo.</em>
             </h1>
             <p class="hero-lead reveal">
-              Explore texturas, escolha cores e metragens e receba um orçamento
-              conferido por uma pessoa da nossa equipe.
+              Explore texturas, escolha a metragem e envie seu pedido direto
+              para a nossa equipe pelo WhatsApp.
             </p>
             <div class="hero-actions reveal">
               <a class="button button-gold" href="#categorias">
@@ -176,8 +176,8 @@
         <div class="page-shell">
           <p>
             <span class="editor-status-dot"></span>
-            Modo editor local ativo
-            <small>As mudanças ficam salvas neste navegador.</small>
+            <span data-editor-bar-title>Modo editor local ativo</span>
+            <small data-editor-bar-detail>As mudanças ficam salvas neste navegador.</small>
           </p>
           <div>
             <button type="button" data-action="open-editor">Gerenciar catálogo</button>
@@ -212,7 +212,7 @@
               <input
                 type="search"
                 data-search
-                placeholder="Buscar tecido, categoria ou cor"
+                placeholder="Buscar tecido ou categoria"
                 autocomplete="off"
               />
               <kbd aria-hidden="true">⌘ K</kbd>
@@ -294,11 +294,11 @@
           <div class="section-heading centered reveal">
             <div>
               <p class="eyebrow">Processo de compra</p>
-              <h2>Solicite seu orçamento <span>em <em>três etapas</em></span></h2>
+              <h2>Envie seu pedido <span>em <em>três etapas</em></span></h2>
             </div>
             <p>
-              O site organiza sua seleção e nossa equipe cuida da conferência
-              comercial antes da finalização.
+              Escolha com calma e envie a lista pronta pelo WhatsApp, sem
+              cadastro e sem preencher dados pessoais.
             </p>
           </div>
           <ol class="steps-grid">
@@ -315,16 +315,16 @@
               <div class="step-icon" aria-hidden="true">
                 <i class="fa-solid fa-cart-plus"></i>
               </div>
-              <h3>Defina os detalhes</h3>
-              <p>Escolha a cor e informe a quantidade de cada item.</p>
+              <h3>Informe a metragem</h3>
+              <p>Defina quantos metros deseja de cada tecido.</p>
             </li>
             <li class="reveal">
               <span class="step-number">03</span>
               <div class="step-icon" aria-hidden="true">
                 <i class="fa-brands fa-whatsapp"></i>
               </div>
-              <h3>Solicite o orçamento</h3>
-              <p>Envie pelo WhatsApp para confirmar estoque, valores e entrega.</p>
+              <h3>Envie no WhatsApp</h3>
+              <p>Finalize direto no WhatsApp para confirmar estoque, valores e entrega.</p>
             </li>
           </ol>
         </div>
@@ -393,7 +393,7 @@
           <div class="contact-card reveal">
             <div class="contact-copy">
               <p class="eyebrow">Atendimento</p>
-              <h2>Vamos organizar seu próximo <em>orçamento?</em></h2>
+              <h2>Vamos organizar seu próximo <em>pedido?</em></h2>
               <p class="contact-lead">
                 Fale com a equipe para tirar dúvidas ou envie o carrinho pronto.
                 Respondemos com a confirmação de disponibilidade, valores e entrega.
@@ -438,7 +438,7 @@
               <h3>O que acontece depois?</h3>
               <ol class="contact-process-list">
                 <li><span>1</span>Recebemos sua lista de produtos.</li>
-                <li><span>2</span>Conferimos estoque, cores e quantidades.</li>
+                <li><span>2</span>Conferimos estoque e metragens.</li>
                 <li><span>3</span>Informamos valores e opções de envio.</li>
               </ol>
               <p class="contact-service-note">
@@ -516,17 +516,9 @@
           <h2 id="product-dialog-title" data-product-dialog-name></h2>
           <p class="product-dialog-description" data-product-dialog-description></p>
 
-          <fieldset class="color-picker">
-            <legend>
-              Escolha a cor
-              <span data-selected-color>Selecione uma opção</span>
-            </legend>
-            <div class="color-options" data-color-options></div>
-          </fieldset>
-
           <div class="quantity-row">
             <div>
-              <span>Quantidade</span>
+              <span>Quantos metros?</span>
               <small data-unit-label>Em metros</small>
             </div>
             <div class="quantity-control">
@@ -545,8 +537,8 @@
             </div>
           </div>
 
-          <button class="button button-gold add-cart-button" type="button" data-action="add-to-cart" disabled>
-            <span>Escolha uma cor</span>
+          <button class="button button-gold add-cart-button" type="button" data-action="add-to-cart">
+            <span>Adicionar à seleção</span>
             <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
           </button>
           <p class="availability-note">
@@ -579,7 +571,7 @@
               <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
             </div>
             <h3>Sua seleção está vazia</h3>
-            <p>Explore os tecidos e escolha as cores que combinam com seu projeto.</p>
+            <p>Explore os tecidos e informe quantos metros deseja de cada item.</p>
             <button class="button button-outline" type="button" data-action="continue-shopping">
               Explorar tecidos
             </button>
@@ -587,132 +579,19 @@
         </div>
         <footer class="cart-footer" data-cart-footer hidden>
           <div class="cart-summary">
-            <div><span>Opções selecionadas</span><strong data-cart-line-count>0</strong></div>
+            <div><span>Tecidos selecionados</span><strong data-cart-line-count>0</strong></div>
             <div><span>Quantidade total</span><strong data-cart-total-quantity>0 m</strong></div>
           </div>
           <p>Valores, estoque e entrega serão confirmados no atendimento.</p>
           <button class="button whatsapp-checkout" type="button" data-action="checkout">
             <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
-            Solicitar orçamento
+            Finalizar pedido no WhatsApp
             <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
           </button>
           <button class="continue-link" type="button" data-action="continue-shopping">
             Continuar escolhendo
           </button>
         </footer>
-      </div>
-    </dialog>
-
-    <dialog
-      class="quote-dialog app-dialog"
-      data-quote-dialog
-      aria-labelledby="quote-dialog-title"
-    >
-      <div class="quote-shell">
-        <header class="dialog-header quote-header">
-          <div>
-            <p class="eyebrow">Última etapa</p>
-            <h2 id="quote-dialog-title">Prepare seu orçamento</h2>
-            <p>Preencha apenas o essencial para a equipe responder com mais agilidade.</p>
-          </div>
-          <button class="dialog-close" type="button" data-action="close-quote" aria-label="Fechar formulário">
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-          </button>
-        </header>
-
-        <form class="quote-form" data-quote-form>
-          <div class="quote-form-grid">
-            <label class="quote-field quote-field-wide">
-              <span>Seu nome <b>obrigatório</b></span>
-              <input
-                type="text"
-                data-quote-name
-                name="customerName"
-                maxlength="80"
-                autocomplete="name"
-                placeholder="Como podemos chamar você?"
-                required
-              />
-            </label>
-
-            <label class="quote-field quote-field-city">
-              <span>Cidade <b>obrigatório</b></span>
-              <input
-                type="text"
-                data-quote-city
-                name="customerCity"
-                maxlength="80"
-                autocomplete="address-level2"
-                placeholder="Sua cidade"
-                required
-              />
-            </label>
-
-            <label class="quote-field quote-field-state">
-              <span>Estado <b>obrigatório</b></span>
-              <input
-                type="text"
-                data-quote-state
-                name="customerState"
-                maxlength="2"
-                minlength="2"
-                autocomplete="address-level1"
-                placeholder="SP"
-                pattern="[A-Za-z]{2}"
-                autocapitalize="characters"
-                required
-              />
-            </label>
-
-            <label class="quote-field">
-              <span>Como deseja receber?</span>
-              <select data-quote-fulfillment name="fulfillment">
-                <option value="Quero consultar as opções">Quero consultar as opções</option>
-                <option value="Entrega">Entrega</option>
-                <option value="Retirada na loja">Retirada na loja</option>
-              </select>
-            </label>
-
-            <label class="quote-field">
-              <span>CEP <b>opcional</b></span>
-              <input
-                type="text"
-                data-quote-postal-code
-                name="postalCode"
-                maxlength="9"
-                inputmode="numeric"
-                autocomplete="postal-code"
-                placeholder="00000-000"
-              />
-            </label>
-
-            <label class="quote-field quote-field-wide">
-              <span>Observações <b>opcional</b></span>
-              <textarea
-                data-quote-notes
-                name="notes"
-                maxlength="500"
-                rows="4"
-                placeholder="Conte sobre prazo, aplicação do tecido ou qualquer detalhe importante."
-              ></textarea>
-            </label>
-          </div>
-
-          <div class="quote-form-footer">
-            <p>
-              <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
-              Seus dados serão incluídos apenas na mensagem que você revisar no WhatsApp.
-            </p>
-            <button class="button whatsapp-checkout quote-submit" type="submit">
-              <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
-              Abrir orçamento no WhatsApp
-              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-            </button>
-            <button class="continue-link" type="button" data-action="back-to-cart">
-              Voltar para a seleção
-            </button>
-          </div>
-        </form>
       </div>
     </dialog>
 
@@ -737,7 +616,7 @@
         </span>
         <p class="eyebrow">Área restrita</p>
         <h2 id="editor-access-title">Acesso ao editor</h2>
-        <p id="editor-access-description">
+        <p id="editor-access-description" data-editor-access-description>
           Digite a senha para habilitar as ferramentas de edição neste dispositivo.
         </p>
 
@@ -784,9 +663,9 @@
       <div class="editor-shell">
         <header class="editor-header">
           <div>
-            <p class="eyebrow">Editor local</p>
+            <p class="eyebrow" data-editor-mode-label>Editor local</p>
             <h2 id="editor-dialog-title">Gerenciar vitrine</h2>
-            <p>Personalize o catálogo salvo neste navegador.</p>
+            <p data-editor-mode-description>Personalize o catálogo salvo neste navegador.</p>
           </div>
           <button class="dialog-close" type="button" data-action="close-editor" aria-label="Fechar editor">
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -796,9 +675,11 @@
         <div class="editor-notice">
           <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
           <p>
-            <strong>Este é um editor local.</strong>
-            Alterações aparecem somente neste dispositivo. Exporte o backup JSON para
-            guardar ou transferir o catálogo com as fotos.
+            <strong data-editor-notice-title>Este é um editor local.</strong>
+            <span data-editor-notice-text>
+              Alterações aparecem somente neste dispositivo. Exporte o backup JSON para
+              guardar ou transferir o catálogo com as fotos.
+            </span>
           </p>
         </div>
 
@@ -886,7 +767,7 @@
                     Remover foto
                   </button>
                 </div>
-                <small>JPG, PNG ou WebP, até 12 MB. A imagem será otimizada automaticamente.</small>
+                <small>JPG, PNG ou WebP, até 12 MB. Arquivos acima de 1,5 MB serão comprimidos automaticamente.</small>
               </div>
               <button class="button button-gold" type="submit">Salvar categoria</button>
             </form>
@@ -921,7 +802,7 @@
             <div class="editor-panel-head">
               <div>
                 <h3>Produtos desta categoria</h3>
-                <p>Crie, edite ou exclua os tecidos e suas cores.</p>
+                <p>Crie, edite ou exclua os tecidos desta categoria.</p>
               </div>
               <button class="mini-gold-button" type="button" data-action="new-product-in-category">
                 <i class="fa-solid fa-plus" aria-hidden="true"></i> Novo produto
@@ -984,25 +865,8 @@
                     Remover foto
                   </button>
                 </div>
-                <small>JPG, PNG ou WebP, até 12 MB. A imagem será otimizada automaticamente.</small>
+                <small>JPG, PNG ou WebP, até 12 MB. Arquivos acima de 1,5 MB serão comprimidos automaticamente.</small>
               </div>
-              <fieldset class="variant-editor" aria-describedby="product-colors-error">
-                <legend>
-                  Cores disponíveis
-                  <button type="button" data-action="add-color-row">
-                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                    Adicionar cor
-                  </button>
-                </legend>
-                <div data-color-rows></div>
-                <small class="variant-editor-note">Defina o nome, escolha a paleta e envie uma foto para cada cor. A vitrine muda a imagem ao selecionar a cor.</small>
-                <small
-                  id="product-colors-error"
-                  class="form-global-error"
-                  data-error-for="product-colors"
-                  role="status"
-                ></small>
-              </fieldset>
               <button class="button button-gold" type="submit">Salvar tecido</button>
             </form>
           </section>
@@ -1026,10 +890,10 @@
                 <span class="data-icon">
                   <i class="fa-solid fa-download" aria-hidden="true"></i>
                 </span>
-                <div><h4>Exportar backup</h4><p>Baixe uma cópia JSON das categorias, produtos, cores e fotos.</p></div>
+                <div><h4>Exportar backup</h4><p>Baixe uma cópia JSON das categorias, produtos e fotos.</p></div>
                 <button type="button" data-action="export-catalog">Exportar backup</button>
               </article>
-              <article>
+              <article data-local-only-action>
                 <span class="data-icon">
                   <i class="fa-solid fa-upload" aria-hidden="true"></i>
                 </span>
@@ -1039,7 +903,7 @@
                   <input type="file" accept="application/json,.json" data-import-input />
                 </label>
               </article>
-              <article>
+              <article data-local-only-action>
                 <span class="data-icon">
                   <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
                 </span>
@@ -1050,7 +914,6 @@
             <div class="catalog-stats">
               <div><span data-stat-categories>0</span><small>categorias</small></div>
               <div><span data-stat-products>0</span><small>tecidos</small></div>
-              <div><span data-stat-colors>0</span><small>cores</small></div>
             </div>
           </section>
         </div>
@@ -1079,6 +942,8 @@
     <div class="toast-region" data-toast-region aria-live="polite" aria-atomic="true"></div>
     <p class="sr-only" data-live-region aria-live="polite"></p>
 
+    <script src="supabase-config.js"></script>
+    <script src="supabase-service.js"></script>
     <script src="app.js" defer></script>
   </body>
 </html>
