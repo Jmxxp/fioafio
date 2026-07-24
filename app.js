@@ -2543,6 +2543,7 @@
     if (product) {
       dom.productForm.elements.id.value = product.id;
       dom.productForm.elements.name.value = product.name;
+      dom.productForm.elements.description.value = product.description || "";
       dom.productForm.elements.categoryId.value = product.categoryId;
       state.productPhotoDraft.existingId = product.imageId || "";
       state.productPhotoDraft.existingLegacy = product.image || "";
@@ -2612,6 +2613,7 @@
     }
     nameError.textContent = "";
     dom.productForm.elements.name.removeAttribute("aria-invalid");
+    var description = cleanText(dom.productForm.elements.description.value, 300);
     var categoryId = dom.productForm.elements.categoryId.value;
     var category = findCategory(categoryId);
     if (!category) {
@@ -2663,7 +2665,7 @@
       }
       product.name = name;
       product.categoryId = category.id;
-      product.description = "";
+      product.description = description;
       product.unit = "metro";
       product.minQuantity = 0.5;
       product.quantityStep = 0.5;
@@ -2708,9 +2710,9 @@
             );
           }
         }
-        var productMessage = product.name + " já aparece na vitrine.";
+        var productMessage = "Título e descrição de “" + product.name + "” foram salvos.";
         if (photoChange === "replace") {
-          productMessage = "Título e foto de “" + product.name + "” foram salvos.";
+          productMessage = "Título, descrição e foto de “" + product.name + "” foram salvos.";
         } else if (photoChange === "remove") {
           productMessage = "“" + product.name + "” foi salvo sem foto.";
         }
@@ -2736,7 +2738,7 @@
       }
       showToast(
         existing ? "Erro ao atualizar produto" : "Erro ao criar produto",
-        friendlyDatabaseError(saveError, "Revise o título e a foto e tente novamente."),
+        friendlyDatabaseError(saveError, "Revise o título, a descrição e a foto e tente novamente."),
         "error"
       );
       renderAll();
